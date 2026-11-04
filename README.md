@@ -155,6 +155,14 @@ JSON
 
 等待时间按真实 group_wait/group_interval/repeat_interval 判断；Alertmanager 返回2xx不等于群里实际送达。测试时记录两渠道 firing/resolved，并确认告警列表中测试项已结束。
 
+## 已执行的离线验证
+
+- 使用 Prometheus 官方 Go 模块 `github.com/prometheus/prometheus v0.47.2` 源码构建的 promtool；构建未注入发布版 ldflags，`--version` 的版本字符串为空，来源版本以构建模块为准。
+- `promtool check rules`：SUCCESS，15 rules found。
+- `promtool test rules`：SUCCESS，5 组测试通过。
+- 所有 range selector 均不超过6h，实际最大为5m；必需 labels/annotations 与两条 suggestion 的结构检查通过。
+- 未执行集群 server dry-run、apply 或 curl POST；上线前仍用现场 Prometheus 对应版本的 promtool 复查，并核对 job/指标/标签。
+
 ## 官方依据
 
 - [Flink 指标](https://nightlies.apache.org/flink/flink-docs-stable/docs/ops/metrics/)与[Prometheus reporter](https://nightlies.apache.org/flink/flink-docs-stable/docs/deployment/metric_reporters/)
