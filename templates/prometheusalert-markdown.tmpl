@@ -1,0 +1,17 @@
+{{/* PrometheusAlert 原始 JSON 模板，需在现网模板测试页验证；不是 Alertmanager 通知模板。 */}}
+{{ range $v := .alerts }}
+### {{ if eq $v.status "resolved" }}已恢复{{ else }}告警中{{ end }}：{{ $v.labels.alertname }}
+级别：{{ if $v.labels.severity }}{{ $v.labels.severity }}{{ else if $v.labels.level }}{{ $v.labels.level }}{{ else }}未设置{{ end }}
+{{ with $v.labels.cluster }}集群：{{ . }}{{ end }}
+{{ with $v.labels.namespace }}命名空间：{{ . }}{{ end }}
+{{ with $v.labels.ingress }}Ingress：{{ . }}{{ end }}
+{{ with $v.labels.node }}节点：{{ . }}{{ end }}
+{{ with $v.labels.pod }}Pod：{{ . }}{{ end }}
+{{ with $v.labels.instance }}实例：{{ . }}{{ end }}
+{{ if $v.annotations.description }}说明：{{ $v.annotations.description }}{{ else if $v.annotations.summary }}说明：{{ $v.annotations.summary }}{{ else }}说明：规则未提供 summary / description{{ end }}
+{{ with $v.annotations.value }}告警评估值：{{ . }}{{ end }}
+{{ with $v.annotations.threshold }}阈值：{{ . }}{{ end }}
+开始时间（原始时区）：{{ $v.startsAt }}
+{{ if eq $v.status "resolved" }}结束时间（原始时区）：{{ $v.endsAt }}{{ end }}
+---
+{{ end }}
