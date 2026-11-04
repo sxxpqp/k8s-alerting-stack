@@ -1,4 +1,5 @@
 .local/
+.generated/
 *.key
 *.pem
 .env
