@@ -1,0 +1,68 @@
+rule_files:
+- rules.yaml
+evaluation_interval: 30s
+tests:
+- interval: 30s
+  input_series:
+  - series: redis_memory_used_bytes{cluster="unit",namespace="apps",pod="test-0",instance="test:9121"}
+    values: 90+0x40
+  - series: redis_memory_max_bytes{cluster="unit",namespace="apps",pod="test-0",instance="test:9121"}
+    values: 0+0x40
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: RedisMemoryHigh
+    exp_alerts: []
+- interval: 30s
+  input_series:
+  - series: redis_memory_used_bytes{cluster="unit",namespace="apps",pod="test-0",instance="test:9121"}
+    values: 90+0x40
+  - series: redis_memory_max_bytes{cluster="unit",namespace="apps",pod="test-0",instance="test:9121"}
+    values: 100+0x40
+  alert_rule_test:
+  - eval_time: 11m
+    alertname: RedisMemoryHigh
+    exp_alerts:
+    - exp_labels:
+        cluster: unit
+        namespace: apps
+        pod: test-0
+        instance: test:9121
+        severity: warning
+        team: database
+      exp_annotations:
+        summary: Redis test:9121 内存接近 maxmemory
+        description: 当前 used_memory/maxmemory=90%，阈值>85%，持续10分钟；maxmemory=0 的实例不参与本规则。
+        suggestion: '检查大 key、TTL、增长速度和内存碎片。
+
+          核对淘汰策略与内存预算；未设置 maxmemory 时另看容器/主机容量。'
+        runbook_url: https://github.com/oliver006/redis_exporter
+- interval: 30s
+  input_series:
+  - series: mysql_global_status_threads_connected{cluster="unit",namespace="apps",pod="test-0",instance="test:9121"}
+    values: 10+0x40
+  - series: mysql_global_variables_max_connections{cluster="unit",namespace="apps",pod="test-0",instance="test:9121"}
+    values: 0+0x40
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: MysqlConnectionsHigh
+    exp_alerts: []
+- interval: 30s
+  input_series:
+  - series: kafka_topic_partition_in_sync_replica{cluster="unit",namespace="apps",pod="test-0",instance="test:9121",topic="orders",partition="0"}
+    values: 1+0x40
+  - series: kafka_topic_partition_replicas{cluster="unit",namespace="apps",pod="test-0",instance="test:9121",topic="orders",partition="0"}
+    values: 1+0x40
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: KafkaInSyncReplicasLow
+    exp_alerts: []
+- interval: 30s
+  input_series:
+  - series: doris_be_disks_avail_capacity{cluster="unit",namespace="apps",pod="test-0",instance="test:9121",path="/data"}
+    values: 0+0x40
+  - series: doris_be_disks_total_capacity{cluster="unit",namespace="apps",pod="test-0",instance="test:9121",path="/data"}
+    values: 0+0x40
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: DorisDiskSpaceCritical
+    exp_alerts: []

@@ -1,0 +1,311 @@
+# 增量规则；namespace、job 与指标标签契约见说明。未部署的组件必须删除对应 group。
+# 不覆盖 kps 内置节点/PVC/CrashLoop/OOM/TargetDown 等规则；先检查现有规则避免等价重复。
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: business-alerts
+  namespace: monitoring
+  labels:
+    release: kps
+spec:
+  groups:
+  - name: business.discovery
+    interval: 30s
+    rules:
+    # 仅为已部署组件启用；必须替换为实际 job。up=0 由现有 kps TargetDown 处理，避免重复。
+    - alert: BusinessMetricsTargetsAbsent
+      expr: |-
+        absent(up{job="flink-jobmanager"})
+        or
+        absent(up{job="flink-taskmanager"})
+        or
+        absent(up{job="kafka-exporter"})
+        or
+        absent(up{job="doris-fe"})
+        or
+        absent(up{job="doris-be"})
+        or
+        absent(up{job="mysqld-exporter"})
+        or
+        absent(up{job="redis-exporter"})
+        or
+        absent(up{job="blackbox-http-external"})
+      for: 10m
+      labels:
+        severity: warning
+        team: sre
+      annotations:
+        summary: 监控任务 {{ $labels.job }} 的全部目标消失
+        description: 当前缺失标记={{ $value }}，阈值=1；该 job 没有任何 up 序列，不代表某个已知实例一定宕机。
+        suggestion: |-
+          检查 ServiceMonitor/PodMonitor/Probe 的选择器、RBAC 和服务发现。
+          确认组件是否预期部署、job 是否改名；按期望实例清单补精确缺失检测。
+        runbook_url: https://prometheus-operator.dev/docs/platform/troubleshooting/
+  - name: business.containers
+    interval: 30s
+    rules:
+    # 增量容量告警，不新增 OOM/CrashLoop 规则；85% 留出余量，按工作集基线调节。
+    - alert: ContainerMemoryLimitNear
+      expr: |-
+        100 * max by (cluster, namespace, pod, container, instance) (
+          container_memory_working_set_bytes{container!="",container!="POD",image!=""}
+        ) / on (cluster, namespace, pod, container) group_left()
+        (max by (cluster, namespace, pod, container) (kube_pod_container_resource_limits{resource="memory",unit="byte"}) > 0)
+        > 85
+      for: 10m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: 容器 {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} 内存接近 limit
+        description: 当前 working set / memory limit={{ $value }}%，阈值>85%，持续10分钟。
+        suggestion: |-
+          检查容器内存趋势、GC、缓存和最近发布。
+          确认 limit 与实际峰值匹配，再决定排查泄漏或调整资源。
+        runbook_url: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+  - name: business.flink
+    interval: 30s
+    rules:
+    # 仅用于需要 checkpoint 的持续流作业；启动后从未完成/作业被删除需期望作业清单补充检测。
+    - alert: FlinkCheckpointStale
+      expr: |-
+        (time() - max by (cluster, namespace, pod, instance, job_id, job_name) (
+          flink_jobmanager_job_lastCheckpointCompletedTimestamp
+        ) / 1000 > 900)
+        and on (cluster, namespace, pod, instance, job_id, job_name)
+        (max by (cluster, namespace, pod, instance, job_id, job_name) (flink_jobmanager_job_lastCheckpointCompletedTimestamp) > 0)
+      for: 10m
+      labels:
+        severity: warning
+        team: data-platform
+      annotations:
+        summary: Flink 作业 {{ $labels.job_name }} 长时间没有成功 checkpoint
+        description: 距最近成功 checkpoint={{ $value }}秒，阈值>900秒，持续10分钟；仅覆盖曾完成 checkpoint 的作业。
+        suggestion: |-
+          检查 checkpoint 是否启用、任务是否预期运行以及失败日志。
+          检查 checkpoint 存储、背压和超时；按业务 RPO 调整900秒阈值。
+        runbook_url: https://nightlies.apache.org/flink/flink-docs-stable/docs/ops/metrics/
+  - name: business.kafka
+    interval: 30s
+    rules:
+    # 仅适用于至少3副本的主题；按 min.insync.replicas 和持久性 SLO 调整，不适用单副本主题。
+    - alert: KafkaInSyncReplicasLow
+      expr: |-
+        (min by (cluster, namespace, pod, instance, topic, partition) (kafka_topic_partition_in_sync_replica) < 2)
+        and on (cluster, namespace, pod, instance, topic, partition)
+        (max by (cluster, namespace, pod, instance, topic, partition) (kafka_topic_partition_replicas) >= 3)
+      for: 3m
+      labels:
+        severity: critical
+        team: data-platform
+      annotations:
+        summary: Kafka 分区 {{ $labels.topic }}/{{ $labels.partition }} 同步副本不足
+        description: 当前 ISR 数={{ $value }}，阈值<2，且配置副本数>=3，持续3分钟，有写入或持久性风险。
+        suggestion: |-
+          立即检查 ISR、broker、磁盘和网络故障。
+          核对 min.insync.replicas 与 producer acks；不要靠降低持久性要求消除告警。
+        runbook_url: https://github.com/danielqsj/kafka_exporter
+    # 排除未知 offset 的负 lag；10000仅为起点，应换算成吞吐与延迟预算。
+    - alert: KafkaConsumerLagHigh
+      expr: |-
+        sum by (cluster, namespace, pod, instance, consumergroup, topic) (
+          kafka_consumergroup_lag >= 0
+        ) > 10000
+      for: 15m
+      labels:
+        severity: warning
+        team: data-platform
+      annotations:
+        summary: Kafka 消费组 {{ $labels.consumergroup }} 主题 {{ $labels.topic }} 积压过高
+        description: 当前 topic 各分区有效 lag 合计={{ $value }}条，阈值>10000条，持续15分钟。
+        suggestion: |-
+          检查 consumer 存活、rebalance、处理异常和下游瓶颈。
+          结合生产速率与可接受延迟调整阈值；按业务排除不再使用的消费组。
+        runbook_url: https://github.com/danielqsj/kafka_exporter
+  - name: business.doris
+    interval: 30s
+    rules:
+    # 两个计数器需核对版本；最低流量门槛减少低流量误报。
+    - alert: DorisQueryErrorRatioHigh
+      expr: |-
+        (
+          100 * sum by (cluster, namespace, pod, instance) (rate(doris_fe_query_err[5m]))
+          / on (cluster, namespace, pod, instance)
+          (sum by (cluster, namespace, pod, instance) (rate(doris_fe_query_total[5m])) > 0)
+          > 5
+        )
+        and on (cluster, namespace, pod, instance)
+        (sum by (cluster, namespace, pod, instance) (rate(doris_fe_query_total[5m])) >= 1)
+      for: 10m
+      labels:
+        severity: warning
+        team: data-platform
+      annotations:
+        summary: Doris FE {{ $labels.instance }} 查询错误比例升高
+        description: 当前5分钟查询错误比例={{ $value }}%，阈值>5%，且查询速率>=1次/秒，持续10分钟。
+        suggestion: |-
+          区分 SQL/权限错误与 FE/BE 系统故障，检查 FE 日志。
+          检查超时、资源组、BE 存活和最近业务变更。
+        runbook_url: https://doris.apache.org/docs/3.x/admin-manual/maint-monitor/metrics/
+    # 需核对 path 标签及容量单位；阈值应结合绝对剩余字节和增长速度调整。
+    - alert: DorisDiskSpaceCritical
+      expr: |-
+        100 * min by (cluster, namespace, pod, instance, path) (doris_be_disks_avail_capacity)
+        / on (cluster, namespace, pod, instance, path)
+        (max by (cluster, namespace, pod, instance, path) (doris_be_disks_total_capacity) > 0) < 3
+      for: 3m
+      labels:
+        severity: critical
+        team: data-platform
+      annotations:
+        summary: Doris BE {{ $labels.instance }} 数据目录 {{ $labels.path }} 即将写满
+        description: 当前数据盘可用比例={{ $value }}%，阈值<3%，持续3分钟，存在写入失败风险。
+        suggestion: |-
+          立即确认磁盘、写入状态和数据增长。
+          按 Doris 运维流程扩容或迁移，禁止手工删除 tablet 文件。
+        runbook_url: https://doris.apache.org/docs/3.x/admin-manual/maint-monitor/metrics/
+  - name: business.mysql
+    interval: 30s
+    rules:
+    # 从关键连接不可用风险按 critical 处理；若只代表非关键监控账号失败，可按实际职责降为 warning。
+    - alert: MysqlUnavailable
+      expr: min by (cluster, namespace, pod, instance) (mysql_up) == 0
+      for: 3m
+      labels:
+        severity: critical
+        team: database
+      annotations:
+        summary: MySQL {{ $labels.instance }} 无法由 exporter 连接
+        description: 当前 mysql_up={{ $value }}，正常阈值=1，异常条件=0，持续3分钟；可能是数据库故障或监控账号/网络问题。
+        suggestion: |-
+          立即独立验证业务连接与数据库存活。
+          检查 exporter 日志、监控凭据、权限和网络，区分采集故障与业务故障。
+        runbook_url: https://github.com/prometheus/mysqld_exporter
+    # 连接容量预警；零分母排除，按连接峰值和预留管理连接数调整。
+    - alert: MysqlConnectionsHigh
+      expr: |-
+        100 * max by (cluster, namespace, pod, instance) (mysql_global_status_threads_connected)
+        / on (cluster, namespace, pod, instance)
+        (max by (cluster, namespace, pod, instance) (mysql_global_variables_max_connections) > 0)
+        > 80
+      for: 10m
+      labels:
+        severity: warning
+        team: database
+      annotations:
+        summary: MySQL {{ $labels.instance }} 连接数接近上限
+        description: 当前连接数占最大连接数={{ $value }}%，阈值>80%，持续10分钟。
+        suggestion: |-
+          检查连接池泄漏、慢查询和长事务。
+          确认峰值与数据库资源后再调整连接上限。
+        runbook_url: https://github.com/prometheus/mysqld_exporter
+  - name: business.redis
+    interval: 30s
+    rules:
+    # 先区分业务不可用和采集账号失败；非关键缓存可按服务等级调整级别。
+    - alert: RedisUnavailable
+      expr: min by (cluster, namespace, pod, instance) (redis_up) == 0
+      for: 3m
+      labels:
+        severity: critical
+        team: database
+      annotations:
+        summary: Redis {{ $labels.instance }} 无法由 exporter 连接
+        description: 当前 redis_up={{ $value }}，正常阈值=1，异常条件=0，持续3分钟；同时核对认证和网络。
+        suggestion: |-
+          独立验证业务读写、实例和 Sentinel/Cluster 状态。
+          检查 exporter 权限、连接地址及网络，确认是否需要故障切换。
+        runbook_url: https://github.com/oliver006/redis_exporter
+    # 明确排除 maxmemory=0，不能把0当成极小正数造成伪高利用率。
+    - alert: RedisMemoryHigh
+      expr: |-
+        100 * max by (cluster, namespace, pod, instance) (redis_memory_used_bytes)
+        / on (cluster, namespace, pod, instance)
+        (max by (cluster, namespace, pod, instance) (redis_memory_max_bytes) > 0)
+        > 85
+      for: 10m
+      labels:
+        severity: warning
+        team: database
+      annotations:
+        summary: Redis {{ $labels.instance }} 内存接近 maxmemory
+        description: 当前 used_memory/maxmemory={{ $value }}%，阈值>85%，持续10分钟；maxmemory=0 的实例不参与本规则。
+        suggestion: |-
+          检查大 key、TTL、增长速度和内存碎片。
+          核对淘汰策略与内存预算；未设置 maxmemory 时另看容器/主机容量。
+        runbook_url: https://github.com/oliver006/redis_exporter
+    # 仅适用提供这两个指标的 Redis Cluster exporter 配置；standalone 不启用该语义。
+    - alert: RedisClusterStateBad
+      expr: |-
+        (min by (cluster, namespace, pod, instance) (redis_cluster_state) != 1)
+        and on (cluster, namespace, pod, instance)
+        (max by (cluster, namespace, pod, instance) (redis_cluster_enabled) == 1)
+      for: 3m
+      labels:
+        severity: critical
+        team: database
+      annotations:
+        summary: Redis Cluster 节点 {{ $labels.instance }} 报告集群异常
+        description: 当前 cluster_state={{ $value }}，正常阈值=1，仅匹配 cluster_enabled=1，持续3分钟。
+        suggestion: |-
+          检查 slots 覆盖、节点连通和主从状态。
+          检查 failover 与 quorum，按 Redis Cluster 恢复流程处理。
+        runbook_url: https://github.com/oliver006/redis_exporter
+  - name: business.domains
+    interval: 30s
+    rules:
+    # 仅对关键业务目标使用 critical；非关键站点可降级，成功由 module 的状态码/TLS策略定义。
+    - alert: DomainHttpProbeFailed
+      expr: |-
+        min by (cluster, namespace, pod, instance) (
+          probe_success{job="blackbox-http-external"}
+        ) == 0
+      for: 3m
+      labels:
+        severity: critical
+        team: sre
+      annotations:
+        summary: HTTP 探测目标 {{ $labels.instance }} 不可用
+        description: 当前 probe_success={{ $value }}，正常阈值=1，异常条件=0，持续3分钟。
+        suggestion: |-
+          从探测器所在网络检查 DNS、TCP、TLS 和 HTTP 状态。
+          结合业务健康检查与 Blackbox 日志确认影响范围。
+        runbook_url: https://github.com/prometheus/blackbox_exporter
+    # 未来到期时间计算不是14天历史查询，兼容本地6h保留；与 critical 区间不重叠。
+    - alert: DomainCertificateExpiring
+      expr: |-
+        ((min by (cluster, namespace, pod, instance) (
+          probe_ssl_earliest_cert_expiry{job="blackbox-http-external"}
+        ) - time()) / 86400 < 14)
+        and on (cluster, namespace, pod, instance)
+        ((min by (cluster, namespace, pod, instance) (
+          probe_ssl_earliest_cert_expiry{job="blackbox-http-external"}
+        ) - time()) / 86400 >= 3)
+      for: 10m
+      labels:
+        severity: warning
+        team: sre
+      annotations:
+        summary: HTTPS 目标 {{ $labels.instance }} 证书即将到期
+        description: 当前证书最早到期剩余={{ $value }}天，预警阈值为3<=剩余天数<14，持续10分钟。
+        suggestion: |-
+          检查证书签发、自动续期任务和入口引用。
+          核对实际证书链、域名和续期后的探测结果。
+        runbook_url: https://github.com/prometheus/blackbox_exporter
+    # 按证书更换提前量调整；TLS失败后该指标可能消失，probe_success 告警负责兜底。
+    - alert: DomainCertificateExpiryCritical
+      expr: |-
+        (min by (cluster, namespace, pod, instance) (
+          probe_ssl_earliest_cert_expiry{job="blackbox-http-external"}
+        ) - time()) / 86400 < 3
+      for: 3m
+      labels:
+        severity: critical
+        team: sre
+      annotations:
+        summary: HTTPS 目标 {{ $labels.instance }} 证书即将失效或已到期
+        description: 当前证书最早到期剩余={{ $value }}天，紧急阈值<3天，负数表示已过期，持续3分钟。
+        suggestion: |-
+          立即确认自动续期失败原因并安排证书更新。
+          验证入口加载新证书、完整链和域名匹配；过期导致 TLS 探测失败时同时看可用性告警。
+        runbook_url: https://github.com/prometheus/blackbox_exporter

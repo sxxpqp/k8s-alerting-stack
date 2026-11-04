@@ -1,8 +1,4 @@
-.local/
 .generated/
+.venv/
 *.key
-*.pem
 .env
-setup.env
-__pycache__/
-*.pyc
