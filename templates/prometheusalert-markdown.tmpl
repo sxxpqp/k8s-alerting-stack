@@ -7,8 +7,12 @@
 {{ with $v.labels.ingress }}Ingress：{{ . }}{{ end }}
 {{ with $v.labels.node }}节点：{{ . }}{{ end }}
 {{ with $v.labels.pod }}Pod：{{ . }}{{ end }}
+{{ with $v.labels.deployment }}Deployment：{{ . }}{{ end }}
+{{ with $v.labels.statefulset }}StatefulSet：{{ . }}{{ end }}
+{{ with $v.labels.daemonset }}DaemonSet：{{ . }}{{ end }}
+{{ with $v.labels.persistentvolumeclaim }}PVC：{{ . }}{{ end }}
 {{ with $v.labels.instance }}实例：{{ . }}{{ end }}
-{{ if $v.annotations.description }}说明：{{ $v.annotations.description }}{{ else if $v.annotations.summary }}说明：{{ $v.annotations.summary }}{{ else }}说明：规则未提供 summary / description{{ end }}
+{{ if $v.annotations.description }}说明：{{ $v.annotations.description }}{{ else if $v.annotations.summary }}说明：{{ $v.annotations.summary }}{{ else if $v.annotations.message }}说明：{{ $v.annotations.message }}{{ else }}说明：规则未提供 description / summary / message{{ end }}
 {{ with $v.annotations.value }}告警评估值：{{ . }}{{ end }}
 {{ with $v.annotations.threshold }}阈值：{{ . }}{{ end }}
 开始时间（原始时区）：{{ $v.startsAt }}

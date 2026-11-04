@@ -40,7 +40,7 @@ ServiceMonitor：selector 选 Service 的 labels，endpoint.port 对应 **Servic
 | --- | --- |
 | severity 存在 / 只有 level / 两者缺失 | 优先 severity，回退 level，最后显示“未设置” |
 | instance 缺失 | 不显示虚构的“主机 IP”；显示 namespace / ingress / pod / node 等真实标签 |
-| description 缺失 / 只有 summary | 回退 summary，不出现 `<no value>` |
+| description 缺失 / 只有 summary / 只有 message | 依次回退 summary、message，不出现 `<no value>` |
 | annotations 为空 | 显示缺少说明提示，可用 labels 排查 |
 | 一组中有 firing 和 resolved | 每条按自身 status 标识，不能全组只显示一种状态 |
 | value 缺失 / 为字符串 0 | 缺失隐藏，字符串 0 正常显示 |

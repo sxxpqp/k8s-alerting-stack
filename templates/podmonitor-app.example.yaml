@@ -1,0 +1,19 @@
+# 直接选择 Pod；port 是 Pod 容器端口名，与 ServiceMonitor 的 Service 端口名不同。
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: REPLACE_WITH_APP_NAME
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - REPLACE_WITH_APP_NAMESPACE
+  selector:
+    matchLabels:
+      app: REPLACE_WITH_POD_LABEL_VALUE
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      scheme: http
+      interval: 30s
+      scrapeTimeout: 10s

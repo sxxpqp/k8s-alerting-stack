@@ -1,0 +1,17 @@
+# Blackbox 配置文件正文，不是 Kubernetes 资源。
+# 新环境的最小参考模块；现网其他模块须先备份、合并，不能整文件覆盖。
+modules:
+  http_2xx:
+    prober: http
+    timeout: 8s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      follow_redirects: true
+      tls_config:
+        insecure_skip_verify: false
+  tcp_connect:
+    prober: tcp
+    timeout: 8s
+    tcp:
+      preferred_ip_protocol: ip4
