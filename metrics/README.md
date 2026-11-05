@@ -36,15 +36,20 @@ cp metrics/servicemonitor.example.yaml .local/metrics/mysql.yaml
 
 编辑新文件：唯一metadata.name、目标namespace、真实selector和命名端口、路径/协议、job。元数据保留 `release: kps` 才能被本例Prometheus选中。通过endpoint.relabelings设置job与alerts规则约定一致，克隆其他组件时一起改job。Flink JM/TM要分别建对象，Doris FE/BE亦然。
 
-Probe需先独立部署Blackbox。填真实Service DNS与端口、模块和目标列表；例如Exporter配置中的http_2xx模块需存在。19115不是新环境的固定端口，不沿用旧环境猜测；证书指标依赖HTTPS成功建立TLS连接。保留TLS校验，目标认证/重定向/期望状态按需求在Blackbox模块配置。模块配置属于Blackbox自身ConfigMap，Probe CR只引用模块。
+Probe需先独立部署Blackbox。填真实Service DNS与端口、模块和目标列表；例如Exporter配置中的http_2xx模块需存在。证书指标依赖HTTPS成功建立TLS连接。保留TLS校验，目标认证/重定向/期望状态按需求在Blackbox模块配置。模块配置属于Blackbox自身ConfigMap，Probe CR只引用模块。
 
 ## 3. 预检、部署与更新
 
 ```bash
-if grep -R -n REPLACE_ .local/metrics; then echo '先替换参数'; exit 1; fi
+# 此命令输出应为空；若仍有占位符，先编辑文件
+grep -n REPLACE_ .local/metrics/mysql.yaml
 kubectl apply --dry-run=server -f .local/metrics/mysql.yaml
 kubectl diff -f .local/metrics/mysql.yaml
-# diff退出1表示有变更；退出>1才是错误，检查差异后执行
+```
+
+diff退出1表示有变更，退出>1才是错误。确认差异后执行：
+
+```bash
 kubectl apply -f .local/metrics/mysql.yaml
 kubectl -n monitoring get servicemonitor,podmonitor,probe -l release=kps
 ```

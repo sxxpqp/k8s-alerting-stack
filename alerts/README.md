@@ -1,6 +1,6 @@
 # 业务告警规则与验证
 
-Helm kube-prometheus-stack 的**精简业务增量告警**：本地保留 6h，本地评估，remote_write 写入 Mimir，通知链路 Alertmanager → PrometheusAlert → 钉钉/飞书。
+Helm kube-prometheus-stack 的**精简业务增量告警**：本地评估，保留上限6h；Mimir远写可选，通知链路 Alertmanager → PrometheusAlert → 钉钉/飞书。
 
 本目录管理15条增量告警；命令均在仓库根目录执行。基础安装见 [Helm 安装](../install/README.md)，采集配置见 [metrics](../metrics/README.md)，通知对接见 [notifications](../notifications/README.md)。不包含旧0.14基线。
 
@@ -84,13 +84,39 @@ cp tests/rules.test.yaml .generated/rules.test.yaml
   promtool test rules rules.test.yaml
 )
 
-# 完成 job/指标/标签/重复规则检查后，再由维护者执行
-kubectl apply --dry-run=server -f alerts/business-alerts.yaml
-kubectl diff -f alerts/business-alerts.yaml
-kubectl apply -f alerts/business-alerts.yaml
 ```
 
-`kubectl diff` 退出码1表示存在差异，不是失败；大于1才是错误。应用后在 Prometheus Rules 页面确认15条已加载、health正常，再验证原始指标有数据与 for 状态。测试覆盖 Redis 零分母/高利用率、MySQL 零分母、Kafka 单副本例外和 Doris 零容量。
+以上单测验证完整规则包的边界行为，不要求每个环境都部署全部组件。测试覆盖Redis零分母/高利用率、MySQL零分母、Kafka单副本例外和Doris零容量。
+
+复制一份本环境的规则，再按第2节删除未部署组件的group和缺失检测分支、调整job/team等；未部署任何业务组件时可先跳过业务规则：
+
+```bash
+mkdir -p .local/alerts
+cp alerts/business-alerts.yaml .local/alerts/business-alerts.yaml
+# 编辑上述文件，只保留本环境适用的规则
+```
+
+编辑后对实际部署文件再次检查语法，再预检和应用：
+
+```bash
+python3 - <<'PY'
+from pathlib import Path
+import yaml
+doc = yaml.safe_load(Path('.local/alerts/business-alerts.yaml').read_text())
+Path('.generated/selected-rules.yaml').write_text(yaml.safe_dump(doc['spec'], allow_unicode=True, sort_keys=False))
+PY
+promtool check rules .generated/selected-rules.yaml
+kubectl apply --dry-run=server -f .local/alerts/business-alerts.yaml
+kubectl diff -f .local/alerts/business-alerts.yaml
+```
+
+`kubectl diff` 退出码1表示存在差异，大于1才是错误。确认差异后执行：
+
+```bash
+kubectl apply -f .local/alerts/business-alerts.yaml
+```
+
+应用后在Prometheus Rules页面确认**所选规则**已加载、health正常，并核对原始指标有数据及for状态；不是固定要求15条。修改表达式或阈值时还需补充相应单测，不能只凭完整规则包原有测试通过就认为改动已验证。
 
 注意：导出给 promtool 的 groups 文件与 CR 源自同一 YAML。语法测试不证明 exporter 指标存在、标签匹配或通知成功。当前会话不对现网执行 apply/通知测试。
 

@@ -1,5 +1,6 @@
 # Chart 92.17.1 的新环境示例；复制到 prom-values.yaml 后编辑。
-# 容量/资源为示例，不是按当前业务估算的生产推荐值。不能覆盖旧安装。
+# 基础安装只需替换cluster和三处StorageClass；资源按实际负载调整。
+# Mimir远写为可选项，配置见mimir.md，本文件不依赖其认证Secret。
 grafana:
   enabled: true
   replicas: 1
@@ -23,7 +24,7 @@ defaultRules:
     team: platform
   rules:
     # 这些上游组含1d/3d等长窗口，不能在本地6h保留中有效评估。
-    # 关闭本地版本后需在 Mimir Ruler 单独维护；不关闭其余基础规则。
+    # 如需这些长窗规则，另行放入Mimir Ruler；不代表已完成迁移。
     kubeApiserverAvailability: false
     kubeApiserverBurnrate: false
     kubeApiserverSlos: false
@@ -40,7 +41,7 @@ prometheus:
     retention: 6h
     retentionSize: 10GB # 与时间限制先到者生效；实际可能不足6h，需容量验收
     replicaExternalLabelName: __replica__
-    # 不设成cluster，否则会覆盖externalLabels.cluster；见安装文档。
+    # 此字段命名实例标识；不要占用下方cluster键。
     prometheusExternalLabelName: prometheus
     externalLabels:
       cluster: REPLACE_CLUSTER
@@ -51,7 +52,7 @@ prometheus:
       limits:
         memory: 2Gi
     # 强制两副本分布在不同节点；至少需要2个满足调度约束的节点。
-    # 使用Chart内置字段，避免自定义affinity与默认soft配置生成重复键。
+    # 单节点测试可降低副本数或改成soft。
     podAntiAffinity: hard
     podAntiAffinityTopologyKey: kubernetes.io/hostname
     storageSpec:
@@ -82,20 +83,10 @@ prometheus:
       matchLabels:
         release: kps
     probeNamespaceSelector: {}
-    # 新采集只走metrics目录的CRD，不再在values中堆additionalScrapeConfigs。
-    remoteWrite:
-      - url: https://REPLACE_MIMIR_HOST/api/v1/push
-        headers:
-          X-Scope-OrgID: REPLACE_TENANT
-        basicAuth:
-          username:
-            name: mimir-remote-write
-            key: username
-          password:
-            name: mimir-remote-write
-            key: password
+    # 业务采集在metrics/中通过CRD维护。
 
 alertmanager:
+  # 初装仅记录告警；notifications/配置完成前不发送群消息。
   config:
     global:
       resolve_timeout: 5m
