@@ -4,3 +4,5 @@
 *.key
 .env
 prom-values.yaml
+/app.conf
+/prom-values.before-upgrade.yaml

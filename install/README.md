@@ -47,13 +47,10 @@ helm repo update
 ## 4. 预览并安装
 
 ```bash
-# 保存完整预览；这条命令成功后再查看、安装
-mkdir -p .generated
 helm install kps prometheus-community/kube-prometheus-stack \
   -n monitoring --create-namespace \
   -f prom-values.yaml --version 92.17.1 \
-  --dry-run=client > .generated/kps-dry-run.txt
-head -30 .generated/kps-dry-run.txt
+  --dry-run=client
 ```
 
 确认无报错后安装：
@@ -64,7 +61,7 @@ helm install kps prometheus-community/kube-prometheus-stack \
   -f prom-values.yaml --version 92.17.1
 ```
 
-Chart负责首次安装所需CRD。client dry-run不验证Pod调度、存储或网络；前30行也不能代表整份预览正确。预览可能包含生成的Secret，不提交Git。
+Chart负责首次安装所需CRD。client dry-run不验证Pod调度、存储或网络，安装后继续验证组件就绪状态。
 
 ## 5. 验证安装
 
@@ -116,10 +113,8 @@ kubectl -n monitoring port-forward svc/kps-grafana 3000:80
 采集、告警、通知分别修改对应CR文件并apply。只有核心栈参数变化时修改 `prom-values.yaml` 并Helm upgrade。先备份当前values：
 
 ```bash
-mkdir -p .local
-chmod 700 .local
 umask 077
-helm get values kps -n monitoring > .local/values-before-upgrade.yaml
+helm get values kps -n monitoring > prom-values.before-upgrade.yaml
 helm history kps -n monitoring
 ```
 

@@ -1,4 +1,4 @@
-# v4.9.1 MySQL模式。复制到.local后填写，不把真实密码提交Git。
+# v4.9.1 MySQL模式。复制到仓库根目录app.conf后填写；app.conf已被Git忽略。
 appname = PrometheusAlert
 runmode = prod
 httpaddr = 0.0.0.0

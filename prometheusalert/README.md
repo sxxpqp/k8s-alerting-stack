@@ -15,32 +15,28 @@ CREATE DATABASE prometheusalert DEFAULT CHARACTER SET utf8mb4;
 ## 2. 创建配置Secret
 
 ```bash
-mkdir -p .local/prometheusalert .generated
-chmod 700 .local .local/prometheusalert
 umask 077
-cp prometheusalert/app.conf.example .local/prometheusalert/app.conf
-chmod 600 .local/prometheusalert/app.conf
+cp prometheusalert/app.conf.example app.conf
 ```
 
-编辑该文件中的登录账号、强密码、MySQL host/user/password；密码按INI格式处理，不保留REPLACE字段。配置仅在.local保存，不进入Git。
+编辑仓库根目录的 `app.conf`，填写登录账号、强密码、MySQL host/user/password；密码按INI格式处理，不保留REPLACE字段。该文件已加入Git忽略列表。umask 077使新建文件仅当前用户可读写。
 
 ```bash
 # 输出应为空，否则先完成替换
-grep -n REPLACE_ .local/prometheusalert/app.conf
+grep -n REPLACE_ app.conf
 kubectl -n monitoring create secret generic prometheusalert-config \
-  --from-file=app.conf=.local/prometheusalert/app.conf \
+  --from-file=app.conf=app.conf \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 本项目直接挂载app.conf并启动二进制，不使用PA_*覆盖配置。v4.9.1入口脚本会打印覆盖的配置值，因此不把数据库/登录密码经此脚本传入。Pod不需要本地SQLite PVC；两副本共享MySQL。不要切回SQLite后继续开两个副本。
 
-## 3. 渲染和部署
+## 3. 预检和部署
 
 以下以prod为例，测试集群改为overlays/test。基础栈已创建monitoring namespace。**首次使用空库时，先把prod/kustomization.yaml的count临时改成1**，完成第4节数据库/模板验证后再恢复为2并重新apply；启动会执行表同步，避免多个副本同时初始化。
 
 ```bash
 kubectl config current-context
-kubectl kustomize prometheusalert/overlays/prod > .generated/prometheusalert.yaml
 kubectl apply --dry-run=server -k prometheusalert/overlays/prod
 kubectl diff -k prometheusalert/overlays/prod
 ```
