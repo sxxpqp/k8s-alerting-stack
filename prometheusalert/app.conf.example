@@ -1,0 +1,47 @@
+# v4.9.1 MySQL模式。复制到.local后填写，不把真实密码提交Git。
+appname = PrometheusAlert
+runmode = prod
+httpaddr = 0.0.0.0
+httpport = 8080
+copyrequestbody = true
+login_user = REPLACE_LOGIN_USER
+login_password = REPLACE_LOGIN_PASSWORD
+logtype = console
+title = PrometheusAlert
+db_driver = mysql
+db_host = REPLACE_MYSQL_HOST
+db_port = 3306
+db_user = REPLACE_MYSQL_USER
+db_password = REPLACE_MYSQL_PASSWORD
+db_name = prometheusalert
+# 渠道开关与默认地址分开；实际机器人地址由通知URL参数传入。
+open-dingding = 1
+open-feishu = 1
+open-weixin = 1
+ddurl =
+fsurl =
+wxurl =
+dd_isatall = 0
+open-dingding-secret = 0
+open-alertgroup = 0
+# 初期不启用额外发送渠道与数据库告警流水，模板仍保存到MySQL。
+AlertRecord = 0
+RecordLive = 0
+alert_to_es = 0
+open-txdx = 0
+open-txdh = 0
+open-hwdx = 0
+open-alydx = 0
+open-alydh = 0
+open-rlydh = 0
+open-email = 0
+open-7moordx = 0
+open-7moordh = 0
+open-tg = 0
+open-workwechat = 0
+open-baidudx = 0
+open-ruliu = 0
+open-bark = 0
+open-voice = 0
+open-feishuapp = 0
+open-kafka = 0

@@ -1,0 +1,139 @@
+# Chart 92.17.1 的新环境示例；复制到 prom-values.yaml 后编辑。
+# 基础安装只需替换cluster和三处StorageClass；资源按实际负载调整。
+# Mimir远写为可选项，配置见mimir.md，本文件不依赖其认证Secret。
+grafana:
+  enabled: true
+  replicas: 1
+  persistence:
+    enabled: true
+    storageClassName: REPLACE_STORAGE_CLASS
+    accessModes: [ReadWriteOnce]
+    size: 5Gi # 仪表盘/插件等存储，按实际使用调整
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: false # 先用port-forward验收；对外入口另配域名/TLS
+
+defaultRules:
+  create: true
+  additionalRuleLabels:
+    team: platform
+  rules:
+    # 这些上游组含1d/3d等长窗口，不能在本地6h保留中有效评估。
+    # 如需这些长窗规则，另行放入Mimir Ruler；不代表已完成迁移。
+    kubeApiserverAvailability: false
+    kubeApiserverBurnrate: false
+    kubeApiserverSlos: false
+    # 与下方控制面采集关闭同步；可达且恢复采集时一起开启。
+    etcd: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeControllerManager: false
+    kubeProxy: false
+
+prometheus:
+  prometheusSpec:
+    replicas: 2
+    retention: 6h
+    retentionSize: 10GB # 与时间限制先到者生效；实际可能不足6h，需容量验收
+    replicaExternalLabelName: __replica__
+    # 此字段命名实例标识；不要占用下方cluster键。
+    prometheusExternalLabelName: prometheus
+    externalLabels:
+      cluster: REPLACE_CLUSTER
+    resources:
+      requests:
+        cpu: 200m
+        memory: 1Gi
+      limits:
+        memory: 2Gi
+    # 强制两副本分布在不同节点；至少需要2个满足调度约束的节点。
+    # 单节点测试可降低副本数或改成soft。
+    podAntiAffinity: hard
+    podAntiAffinityTopologyKey: kubernetes.io/hostname
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: REPLACE_STORAGE_CLASS
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 20Gi
+    ruleSelectorNilUsesHelmValues: false
+    ruleSelector:
+      matchLabels:
+        release: kps
+    ruleNamespaceSelector: {}
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector:
+      matchLabels:
+        release: kps
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelector:
+      matchLabels:
+        release: kps
+    podMonitorNamespaceSelector: {}
+    probeSelectorNilUsesHelmValues: false
+    probeSelector:
+      matchLabels:
+        release: kps
+    probeNamespaceSelector: {}
+    # 业务采集在metrics/中通过CRD维护。
+
+alertmanager:
+  # 初装仅记录告警；notifications/配置完成前不发送群消息。
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: 'null'
+      group_by: [cluster, namespace, alertname]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 1h
+      routes:
+        - receiver: 'null'
+          matchers: ['severity="info"']
+        - receiver: 'null'
+          matchers: ['alertname="Watchdog"']
+        - receiver: 'null'
+          matchers: ['alertname="InfoInhibitor"']
+    receivers:
+      - name: 'null'
+  alertmanagerSpec:
+    replicas: 3
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: REPLACE_STORAGE_CLASS
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 2Gi
+    alertmanagerConfigSelector:
+      matchLabels:
+        release: kps
+        alert-routing: prometheusalert
+    alertmanagerConfigNamespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: monitoring
+    # 在受信任的monitoring命名空间集中管理路由，接收其他业务namespace告警。
+    # 不允许任意业务命名空间创建匹配此selector的路由。
+    alertmanagerConfigMatcherStrategy:
+      type: None
+
+# 参考kind/kubeadm环境：仅在实际端点不可达/暂不监控时关闭。
+# 这会失去对应组件的监控覆盖；生产可配置可达的安全端点后恢复。
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeProxy:
+  enabled: false

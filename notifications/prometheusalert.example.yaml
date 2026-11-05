@@ -1,0 +1,31 @@
+# 先建立同namespace的 prometheusalert-webhooks Secret，再apply本CR。
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: prometheusalert
+  namespace: monitoring
+  labels:
+    release: kps
+    alert-routing: prometheusalert
+spec:
+  route:
+    receiver: notify-both
+    groupBy: [cluster, namespace, alertname]
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 1h
+    matchers:
+      - name: severity
+        matchType: '=~'
+        value: 'warning|critical'
+  receivers:
+    - name: notify-both
+      webhookConfigs:
+        - urlSecret:
+            name: prometheusalert-webhooks
+            key: dingtalk-url
+          sendResolved: true
+        - urlSecret:
+            name: prometheusalert-webhooks
+            key: feishu-url
+          sendResolved: true

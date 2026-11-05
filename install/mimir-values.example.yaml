@@ -1,0 +1,16 @@
+# 可选配置片段；基础安装不使用此文件。
+# 将remoteWrite段合并到本环境prom-values.yaml的prometheus.prometheusSpec下，
+# 完成认证Secret和Mimir HA配置后再执行Helm upgrade。
+prometheus:
+  prometheusSpec:
+    remoteWrite:
+      - url: https://REPLACE_MIMIR_HOST/api/v1/push
+        headers:
+          X-Scope-OrgID: REPLACE_TENANT
+        basicAuth:
+          username:
+            name: mimir-remote-write
+            key: username
+          password:
+            name: mimir-remote-write
+            key: password

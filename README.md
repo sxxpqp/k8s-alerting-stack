@@ -1,52 +1,33 @@
 # k8s-alerting-stack
 
-整理现有 Kubernetes 监控告警系统，逐步形成可维护、可验证、可回滚的部署配置。通知渠道为钉钉群机器人和企业微信群机器人。
+使用Helm安装Prometheus、Alertmanager、Grafana，后续用CRD分别管理指标采集、告警规则和通知路由。默认本地保留上限6h；Mimir远写可选，通知后续对接PrometheusAlert → 钉钉/飞书。
 
-当前阶段：**现网配置采集与接管准备**。本仓库尚不是全新集群的一键安装包。采集资料中没有完整的选择器、路由、模板和存储定义，不能据此生成声称可直接替换现网的部署清单。
+| 目录 | 文件/资源 | 如何更新 |
+| --- | --- | --- |
+| [install/](install/README.md) | Helm values、安装与回滚步骤 | 修改环境 values 后用 Helm upgrade；不手改 Helm 管理的 Prometheus CR |
+| [metrics/](metrics/README.md) | ServiceMonitor / PodMonitor / Probe 示例 | 配好实际目标后 kubectl apply -f 单个文件 |
+| [alerts/](alerts/README.md) | 15条增量告警、指标依赖和测试方法 | 按环境选择规则，promtool校验后apply对应文件 |
+| [notifications/](notifications/README.md) | AlertmanagerConfig、PrometheusAlert 对接 | 先建URL Secret，再 apply 通知路由CR |
+| [prometheusalert/](prometheusalert/README.md) | Kustomize base、test/prod、MySQL配置 | Secret准备后kubectl apply -k |
+| [Mimir（可选）](install/mimir.md) | remote_write与认证 | 合并到环境values后Helm upgrade |
+| tests/ | 告警边界测试 | 按 alerts/README 的命令执行 |
 
 ```mermaid
 flowchart LR
-  E[节点 / kube-state-metrics / 业务指标] --> P[Prometheus k8s ×2]
-  SM[ServiceMonitor / PodMonitor] --> P
-  R[PrometheusRule] --> P
-  P --> A[Alertmanager main ×3]
-  A --> C[PrometheusAlert]
-  C --> D[钉钉群]
-  C --> W[企业微信群]
+  CR[ServiceMonitor / PodMonitor / Probe] --> P[Prometheus：本地6h]
+  RULE[PrometheusRule] --> P
+  P -. 可选remote_write .-> M[Mimir]
+  P --> AM[Alertmanager]
+  ROUTE[AlertmanagerConfig] --> AM
+  AM --> PA[PrometheusAlert]
+  PA --> DB[MySQL：模板持久化]
+  PA --> CHAT[钉钉 / 飞书]
 ```
 
-上图是待核实的目标链路；已确认组件存在，实际通知路由和接收目标仍需原配置确认。
+**执行顺序：基础安装 → 采集 → 告警 → PrometheusAlert部署 → 通知路由 → 联调。** 各文档命令在仓库根目录执行。示例中的REPLACE字段必须替换；没有部署的组件不要启用对应缺失检测。已有环境先核对原release/values/CRD，不直接照新装步骤覆盖。
 
-## 从这里开始
+固定Chart `92.17.1`，release `kps`，namespace `monitoring`。从 [安装文档](install/README.md) 开始：复制values、替换集群名和StorageClass、预览、安装、验证Prometheus/Alertmanager/Grafana。默认启用Prometheus 2副本、Alertmanager 3副本、Grafana 1副本；初装通知为空接收器，完成通知对接后才能发送群消息。
 
-1. 阅读 [现网基线](docs/01-current-state.md)，核对已知事实与问题。
-2. 在现有管理机运行 [采集流程](docs/02-collection.md)，不修改集群。
-3. 按 [待补配置](docs/03-open-items.md) 提供经过检查的资料，不提交凭据。
-4. 按 [实施与验收流程](docs/04-rollout.md) 核对选择器、规则、模板、通知链路并逐项验收。
+KPS基础规则复用，超出6h的API SLO组和参考环境不可达的控制面采集/规则暂关闭，细节见values注释。业务采集和告警仅启用已部署、已核对指标的组件。项目提供通用采集模板、15条增量告警、PrometheusAlert部署及通知接入；业务exporter、Blackbox、MySQL和Mimir本身需另备。
 
-```bash
-git clone https://github.com/sxxpqp/k8s-alerting-stack.git
-cd k8s-alerting-stack
-python3 scripts/collect.py
-```
-
-脚本要求 Python 3 和已配置权限的 kubectl，只执行读取命令。原始备份存入 `.local/`；它可能包含环境变量和内网信息，不能直接上传。
-
-## 仓库内容
-
-| 路径 | 用途 |
-| --- | --- |
-| docs/ | 现状、采集、待补项、验证和回滚步骤 |
-| scripts/collect.py | 收集现有安装与关联配置，生成受限分享资料 |
-| baseline/ingress-nginx-rule.yaml | 已上传规则的清理副本，作为比对基线，不是完整现网备份 |
-| proposals/ingress-5xx-rule.yaml | 5xx 规则的候选修复，需要查询真实指标后再采用 |
-| templates/prometheusalert-markdown.tmpl | 缺字段时回退的候选消息正文，尚需在现网 v4.9.2 页面测试 |
-
-基线、候选修复和后续已验收配置分开管理。不要同时部署同名告警的旧、新规则。
-
-## 验证状态
-
-- 已有证据：用户提供的资源清单及 Ingress 告警规则（2026-11-04）。
-- 本地检查记录见 [验收流程](docs/04-rollout.md)。
-- 尚未连接集群、导入模板或发送测试消息；K8s 准入、规则实际加载、消息格式、恢复通知、去重与持久化仍待现网验收。
-- 新环境安装与版本选型将在现网完整配置归档后编写；不从资源 labels 猜测运行版本，不使用未经核验的镜像标签。
+已完成离线验证：固定Chart的Helm lint/template、test/prod Kustomize渲染通过；默认规则窗口均≤6h；5份监控CR按Chart内CRD检查字段/类型/必填/枚举通过；15条业务告警通过promtool及5组单测；通知模板验证缺字段降级和混合触发/恢复。以上不等价于API准入或上线验收，现场仍需验证存储、MySQL与真实群消息。

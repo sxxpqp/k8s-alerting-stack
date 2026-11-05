@@ -1,0 +1,6 @@
+.generated/
+.local/
+.venv/
+*.key
+.env
+prom-values.yaml

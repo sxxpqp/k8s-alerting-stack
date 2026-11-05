@@ -1,0 +1,18 @@
+{{ range $a := .alerts }}
+{{ if eq $a.status "resolved" }}### 告警恢复{{ else }}### 告警触发{{ end }}
+**告警：** {{ with $a.labels.alertname }}{{ . }}{{ else }}未命名告警{{ end }}
+**级别：** {{ with $a.labels.severity }}{{ . }}{{ else }}{{ with $a.labels.level }}{{ . }}{{ else }}未设置{{ end }}{{ end }}
+{{ with $a.labels.cluster }}**集群：** {{ . }}{{ end }}
+{{ with $a.labels.namespace }}**命名空间：** {{ . }}{{ end }}
+{{ with $a.labels.pod }}**Pod：** {{ . }}{{ end }}
+{{ with $a.labels.instance }}**实例：** {{ . }}{{ end }}
+{{ with $a.labels.service }}**服务：** {{ . }}{{ end }}
+{{ with $a.labels.job }}**采集任务：** {{ . }}{{ end }}
+**内容：** {{ with $a.annotations.description }}{{ . }}{{ else }}{{ with $a.annotations.summary }}{{ . }}{{ else }}{{ with $a.annotations.message }}{{ . }}{{ else }}无详细描述，请查看原始告警标签{{ end }}{{ end }}{{ end }}
+{{ with $a.annotations.suggestion }}**排查建议：**
+{{ . }}{{ end }}
+{{ with $a.annotations.runbook_url }}[排查文档]({{ . }}){{ end }}
+{{ with $a.startsAt }}**开始：** {{ . }}{{ end }}
+{{ if eq $a.status "resolved" }}{{ with $a.endsAt }}**结束：** {{ . }}{{ end }}{{ end }}
+---
+{{ end }}
