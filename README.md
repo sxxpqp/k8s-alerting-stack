@@ -23,7 +23,7 @@ flowchart LR
 
 **执行顺序：安装 → 采集 → 告警 → 通知 → 联调。** 各文档命令在仓库根目录执行。示例中的 REPLACE 字段必须替换；没有部署的组件不要启用对应缺失检测。已有环境先核对原 release/values/CRD，不直接照新装步骤覆盖。
 
-固定示例 Chart：92.18.0（Operator 0.94.2），声明 Kubernetes >=1.25。固定版本和最低版本声明不等于已在你的目标集群验收；安装前按文档做 server dry-run。KPS 自带规则保留，超出6h的长窗SLO组从本地关闭，另行放到 Mimir Ruler，不静默声称已迁移。
+固定示例 Chart：92.17.1（Operator 0.94.2），声明 Kubernetes >=1.25。按安装文档使用 `helm install kps prometheus-community/kube-prometheus-stack -n monitoring --create-namespace -f prom-values.yaml --version 92.17.1`；先client dry-run预览，再安装并验收。Grafana随Chart启用，使用5Gi持久化存储，访问及初始密码见安装文档。KPS 自带规则保留，超出6h的长窗SLO组从本地关闭，另行放到 Mimir Ruler。
 
 当前提供的是文档和配置示例：Mimir 地址/认证、StorageClass、资源大小、业务目标、实际 job 和 PrometheusAlert URL 都由环境填写。KPS 不会自动安装 Flink、Kafka、Doris、数据库 exporter、Blackbox 或 PrometheusAlert。
 

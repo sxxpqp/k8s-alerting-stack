@@ -1,7 +1,21 @@
-# Chart 92.18.0 的新环境示例；复制到 .local/kps-values.yaml 后编辑。
+# Chart 92.17.1 的新环境示例；复制到 prom-values.yaml 后编辑。
 # 容量/资源为示例，不是按当前业务估算的生产推荐值。不能覆盖旧安装。
 grafana:
-  enabled: false # 复用已有Grafana；新环境需要时另配其存储、账号和入口。
+  enabled: true
+  replicas: 1
+  persistence:
+    enabled: true
+    storageClassName: REPLACE_STORAGE_CLASS
+    accessModes: [ReadWriteOnce]
+    size: 5Gi # 仪表盘/插件等存储，按实际使用调整
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: false # 先用port-forward验收；对外入口另配域名/TLS
 
 defaultRules:
   create: true
@@ -13,18 +27,33 @@ defaultRules:
     kubeApiserverAvailability: false
     kubeApiserverBurnrate: false
     kubeApiserverSlos: false
+    # 与下方控制面采集关闭同步；可达且恢复采集时一起开启。
+    etcd: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeControllerManager: false
+    kubeProxy: false
 
 prometheus:
   prometheusSpec:
     replicas: 2
     retention: 6h
+    retentionSize: 10GB # 与时间限制先到者生效；实际可能不足6h，需容量验收
     replicaExternalLabelName: __replica__
+    # 不设成cluster，否则会覆盖externalLabels.cluster；见安装文档。
+    prometheusExternalLabelName: prometheus
     externalLabels:
       cluster: REPLACE_CLUSTER
     resources:
       requests:
-        cpu: 500m
+        cpu: 200m
+        memory: 1Gi
+      limits:
         memory: 2Gi
+    # 强制两副本分布在不同节点；至少需要2个满足调度约束的节点。
+    # 使用Chart内置字段，避免自定义affinity与默认soft配置生成重复键。
+    podAntiAffinity: hard
+    podAntiAffinityTopologyKey: kubernetes.io/hostname
     storageSpec:
       volumeClaimTemplate:
         spec:
@@ -32,7 +61,7 @@ prometheus:
           accessModes: [ReadWriteOnce]
           resources:
             requests:
-              storage: 50Gi
+              storage: 20Gi
     ruleSelectorNilUsesHelmValues: false
     ruleSelector:
       matchLabels:
@@ -106,3 +135,14 @@ alertmanager:
     # 不允许任意业务命名空间创建匹配此selector的路由。
     alertmanagerConfigMatcherStrategy:
       type: None
+
+# 参考kind/kubeadm环境：仅在实际端点不可达/暂不监控时关闭。
+# 这会失去对应组件的监控覆盖；生产可配置可达的安全端点后恢复。
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeProxy:
+  enabled: false
