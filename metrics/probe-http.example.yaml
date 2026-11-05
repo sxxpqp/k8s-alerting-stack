@@ -1,0 +1,22 @@
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: blackbox-http-external
+  namespace: monitoring
+  labels:
+    release: kps
+spec:
+  jobName: blackbox-http-external
+  module: http_2xx
+  interval: 30s
+  scrapeTimeout: 10s
+  prober:
+    # KPS不自带Blackbox。填写单独部署的实际Service与探测端口。
+    url: REPLACE_BLACKBOX_SERVICE:REPLACE_PROBE_PORT
+    path: /probe
+  targets:
+    staticConfig:
+      labels:
+        env: REPLACE_ENV
+      static:
+        - https://REPLACE_TARGET_HOST/health
