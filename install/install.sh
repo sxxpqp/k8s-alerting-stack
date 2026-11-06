@@ -8,8 +8,10 @@ esac
 require helm
 configured install/prom-values.yaml
 context
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update prometheus-community
+if ! helm repo list 2>/dev/null | grep -q '^prometheus-community'; then
+  helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+fi
+fi repo update prometheus-community
 if [[ "$action" == upgrade ]]; then
   helm get values kps -n monitoring > prom-values.before-upgrade.yaml
 fi
