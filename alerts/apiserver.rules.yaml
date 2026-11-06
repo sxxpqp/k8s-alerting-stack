@@ -1,0 +1,37 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alerts-apiserver
+  namespace: monitoring
+  labels:
+    release: kps
+    app: kube-prometheus-stack
+    team: platform
+spec:
+  groups:
+  - name: apiserver
+    interval: 30s
+    rules:
+    - alert: KubeAPIServerErrorRate
+      expr: |-
+        sum(rate(apiserver_request_total{code=~"5.."}[5m])) by (cluster) /
+        sum(rate(apiserver_request_total[5m])) by (cluster) * 100 > 3
+      for: 5m
+      labels:
+        severity: critical
+        team: platform
+      annotations:
+        summary: API Server 5xx 错误率超过 3%
+        description: 当前 5xx 比例={{ $value }}%，阈值 >3%，持续 5 分钟
+        suggestion: 检查 API Server 日志和 etcd 状态
+    - alert: KubeAPIServerLatency
+      expr: |-
+        histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket[5m])) by (le, verb, cluster)) > 3
+      for: 10m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: API Server {{ $labels.verb }} 请求 P99 延迟超过 3 秒
+        description: 当前 P99 延迟={{ $value }}秒，阈值 >3 秒，持续 10 分钟
+        suggestion: 排查 API Server 负载、etcd 延迟和请求量

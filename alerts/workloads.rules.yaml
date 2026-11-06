@@ -1,0 +1,48 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alerts-workloads
+  namespace: monitoring
+  labels:
+    release: kps
+    app: kube-prometheus-stack
+    team: platform
+spec:
+  groups:
+  - name: workloads
+    interval: 30s
+    rules:
+    - alert: DeploymentReplicasMismatch
+      expr: |-
+        kube_deployment_spec_replicas != kube_deployment_status_replicas_available
+        and on (deployment, namespace, cluster) kube_deployment_status_replicas_updated == kube_deployment_spec_replicas
+      for: 15m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: Deployment {{ $labels.namespace }}/{{ $labels.deployment }} 可用副本数不达预期
+        description: 期望 {{ $labels.kube_deployment_spec_replicas }} 副本，当前可用不足，持续 15 分钟
+        suggestion: 检查 Pod 状态、节点资源和调度情况
+    - alert: StatefulSetReplicasMismatch
+      expr: |-
+        kube_statefulset_replicas != kube_statefulset_status_replicas_ready
+      for: 15m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: StatefulSet {{ $labels.namespace }}/{{ $labels.statefulset }} 就绪副本不足
+        description: 期望 {{ $labels.kube_statefulset_replicas }} 副本，就绪副本不足，持续 15 分钟
+        suggestion: 检查 Pod 状态和 PVC 绑定情况
+    - alert: DaemonSetMisscheduled
+      expr: |-
+        kube_daemonset_status_number_misscheduled > 0
+      for: 10m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: DaemonSet {{ $labels.namespace }}/{{ $labels.daemonset }} 有 Pod 调度到非预期节点
+        description: 调度异常的 Pod 数={{ $value }}，持续 10 分钟
+        suggestion: 检查节点标签、污点和亲和性配置

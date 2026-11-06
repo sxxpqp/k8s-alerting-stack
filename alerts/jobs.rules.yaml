@@ -1,0 +1,36 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alerts-jobs
+  namespace: monitoring
+  labels:
+    release: kps
+    app: kube-prometheus-stack
+    team: platform
+spec:
+  groups:
+  - name: jobs
+    interval: 30s
+    rules:
+    - alert: JobFailed
+      expr: |-
+        kube_job_failed > 0
+      for: 5m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: Job {{ $labels.namespace }}/{{ $labels.job_name }} 执行失败
+        description: 当前失败 Job 数={{ $value }}，持续 5 分钟
+        suggestion: 检查 Job Pod 日志和事件，排查失败原因
+    - alert: CronJobTooLong
+      expr: |-
+        time() - kube_cronjob_next_schedule_time > 3600
+      for: 5m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: CronJob {{ $labels.namespace }}/{{ $labels.cronjob }} 下次调度时间异常
+        description: 距离下次调度时间超过 1 小时，可能存在调度问题
+        suggestion: 检查 CronJob 调度配置和控制器状态

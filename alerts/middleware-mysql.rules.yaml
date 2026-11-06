@@ -1,0 +1,59 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alerts-middleware-mysql
+  namespace: monitoring
+  labels:
+    release: kps
+    app: kube-prometheus-stack
+    team: database
+spec:
+  groups:
+  - name: mysql
+    interval: 30s
+    rules:
+    - alert: MysqlDown
+      expr: |-
+        mysql_up == 0
+      for: 2m
+      labels:
+        severity: critical
+        team: database
+      annotations:
+        summary: MySQL {{ $labels.instance }} 不可达
+        description: mysql_up=0，exporter 无法连接数据库，持续 2 分钟
+        suggestion: 确认数据库存活，检查 exporter 连接和权限
+    - alert: MysqlConnectionsHigh
+      expr: |-
+        100 * mysql_global_status_threads_connected / mysql_global_variables_max_connections > 80
+        and mysql_global_variables_max_connections > 0
+      for: 10m
+      labels:
+        severity: warning
+        team: database
+      annotations:
+        summary: MySQL {{ $labels.instance }} 连接数超过 80%
+        description: 当前连接数/最大连接数={{ $value }}%，阈值 >80%，持续 10 分钟
+        suggestion: 检查连接池配置、慢查询和长事务
+    - alert: MysqlReplicationLag
+      expr: |-
+        mysql_slave_status_seconds_behind_master > 300
+      for: 5m
+      labels:
+        severity: warning
+        team: database
+      annotations:
+        summary: MySQL {{ $labels.instance }} 主从复制延迟超过 5 分钟
+        description: 当前延迟={{ $value }}秒，阈值 >300 秒
+        suggestion: 检查从库 IO/SQL 线程状态和主库写入量
+    - alert: MysqlSlowQueries
+      expr: |-
+        rate(mysql_global_status_slow_queries[5m]) > 5
+      for: 5m
+      labels:
+        severity: warning
+        team: database
+      annotations:
+        summary: MySQL {{ $labels.instance }} 慢查询速率过高
+        description: 当前慢查询速率={{ $value }}/秒，阈值 >5/秒
+        suggestion: 检查慢查询日志，优化 SQL 或索引

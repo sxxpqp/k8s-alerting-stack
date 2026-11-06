@@ -1,0 +1,58 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alerts-node
+  namespace: monitoring
+  labels:
+    release: kps
+    app: kube-prometheus-stack
+    team: platform
+spec:
+  groups:
+  - name: node
+    interval: 30s
+    rules:
+    - alert: NodeCPUHigh
+      expr: |-
+        100 - (avg by (instance, cluster) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+      for: 10m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: 节点 {{ $labels.instance }} CPU 使用率超过 90%
+        description: 当前 CPU 使用率={{ $value }}%，阈值 >90%，持续 10 分钟
+        suggestion: 检查节点上的高负载 Pod，确认是否有异常进程或资源泄漏
+    - alert: NodeMemoryHigh
+      expr: |-
+        (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+      for: 10m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: 节点 {{ $labels.instance }} 内存使用率超过 90%
+        description: 当前内存使用率={{ $value }}%，阈值 >90%，持续 10 分钟
+        suggestion: 排查高内存消耗的 Pod，检查是否有内存泄漏
+    - alert: NodeDiskPressure
+      expr: |-
+        (node_filesystem_avail_bytes{fstype!="tmpfs",fstype!="overlay"} / node_filesystem_size_bytes{fstype!="tmpfs",fstype!="overlay"}) * 100 < 15
+      for: 5m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: 节点 {{ $labels.instance }} 磁盘 {{ $labels.mountpoint }} 可用空间不足 15%
+        description: 当前可用比例={{ $value }}%，阈值 <15%，持续 5 分钟
+        suggestion: 清理无用镜像和日志，检查 PVC 使用情况，必要时扩容
+    - alert: NodeDiskCritical
+      expr: |-
+        (node_filesystem_avail_bytes{fstype!="tmpfs",fstype!="overlay"} / node_filesystem_size_bytes{fstype!="tmpfs",fstype!="overlay"}) * 100 < 5
+      for: 3m
+      labels:
+        severity: critical
+        team: platform
+      annotations:
+        summary: 节点 {{ $labels.instance }} 磁盘 {{ $labels.mountpoint }} 可用空间不足 5%
+        description: 当前可用比例={{ $value }}%，阈值 <5%，持续 3 分钟，紧急处理
+        suggestion: 立即清理磁盘空间或扩容，避免节点不可用

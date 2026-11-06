@@ -1,0 +1,47 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alerts-middleware-kafka
+  namespace: monitoring
+  labels:
+    release: kps
+    app: kube-prometheus-stack
+    team: data-platform
+spec:
+  groups:
+  - name: kafka
+    interval: 30s
+    rules:
+    - alert: KafkaBrokerDown
+      expr: |-
+        kafka_brokers < 3
+      for: 5m
+      labels:
+        severity: critical
+        team: data-platform
+      annotations:
+        summary: Kafka 集群可用 broker 数量不足
+        description: 当前在线 broker={{ $value }}，预期 >=3，持续 5 分钟
+        suggestion: 立即检查 Kafka broker 状态，排查下线原因
+    - alert: KafkaUnderReplicated
+      expr: |-
+        sum(kafka_server_replicamanager_underreplicatedpartitions) > 0
+      for: 10m
+      labels:
+        severity: critical
+        team: data-platform
+      annotations:
+        summary: Kafka 存在副本不足的分区
+        description: 副本不足分区数={{ $value }}，持续 10 分钟
+        suggestion: 检查 broker 存活状态，确认 ISR 同步
+    - alert: KafkaConsumerLagHigh
+      expr: |-
+        sum by (consumergroup, topic) (kafka_consumergroup_lag) > 100000
+      for: 15m
+      labels:
+        severity: warning
+        team: data-platform
+      annotations:
+        summary: Kafka 消费组 {{ $labels.consumergroup }} 主题 {{ $labels.topic }} 积压过高
+        description: 当前 lag={{ $value }}条，阈值 >100000，持续 15 分钟
+        suggestion: 检查消费者存活和吞吐能力，确认是否需要扩容

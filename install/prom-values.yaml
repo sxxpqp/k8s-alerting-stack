@@ -1,0 +1,132 @@
+# Chart 92.17.1 生产配置模板；直接填写本文件后安装。
+# 基础安装需替换cluster、StorageClass、Prometheus PVC和retentionSize；容量按实际采样量验收。
+grafana:
+  enabled: true
+  replicas: 1
+  persistence:
+    enabled: true
+    # storageClassName: standard  # 留空使用集群默认 StorageClass
+    accessModes: [ReadWriteOnce]
+    size: 5Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  service:
+    type: ClusterIP
+  ingress:
+    enabled: false
+
+defaultRules:
+  create: true
+  additionalRuleLabels:
+    team: platform
+  rules:
+    kubeApiserverAvailability: false
+    kubeApiserverBurnrate: false
+    kubeApiserverSlos: false
+    etcd: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeControllerManager: false
+    kubeProxy: false
+
+prometheus:
+  prometheusSpec:
+    replicas: 2
+    retention: 24h
+    retentionSize: 18GB
+    replicaExternalLabelName: __replica__
+    prometheusExternalLabelName: prometheus
+    externalLabels:
+      cluster: kind-kubesphere-341
+    resources:
+      requests:
+        cpu: 200m
+        memory: 1Gi
+      limits:
+        memory: 2Gi
+    podAntiAffinity: hard
+    podAntiAffinityTopologyKey: kubernetes.io/hostname
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          # storageClassName: standard  # 留空使用集群默认 StorageClass
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 20Gi
+    ruleSelectorNilUsesHelmValues: false
+    ruleSelector:
+      matchLabels:
+        release: kps
+    ruleNamespaceSelector: {}
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector:
+      matchLabels:
+        release: kps
+    serviceMonitorNamespaceSelector: {}
+    podMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelector:
+      matchLabels:
+        release: kps
+    podMonitorNamespaceSelector: {}
+    probeSelectorNilUsesHelmValues: false
+    probeSelector:
+      matchLabels:
+        release: kps
+    probeNamespaceSelector: {}
+
+    # 外部采集目标统一用 Secret 管理：修改后 kubectl apply 即可，无需 helm upgrade
+    additionalScrapeConfigsSecret:
+      enabled: true
+      name: external-scrape-configs
+      key: scrape.yaml
+
+alertmanager:
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: 'null'
+      group_by: [cluster, namespace, alertname]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 1h
+      routes:
+        - receiver: 'null'
+          matchers: ['severity="info"']
+        - receiver: 'null'
+          matchers: ['alertname="Watchdog"']
+        - receiver: 'null'
+          matchers: ['alertname="InfoInhibitor"']
+    receivers:
+      - name: 'null'
+  alertmanagerSpec:
+    replicas: 3
+    storage:
+      volumeClaimTemplate:
+        spec:
+          # storageClassName: standard  # 留空使用集群默认 StorageClass
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 2Gi
+    alertmanagerConfigSelector:
+      matchLabels:
+        release: kps
+        alert-routing: prometheusalert
+    alertmanagerConfigNamespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: monitoring
+    alertmanagerConfigMatcherStrategy:
+      type: None
+
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeProxy:
+  enabled: false

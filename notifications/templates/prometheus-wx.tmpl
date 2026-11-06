@@ -1,0 +1,55 @@
+{{/* ===== 企业微信 Markdown 告警通知模板 ===== */}}
+{{- range $a := .alerts }}
+{{- if eq $a.status "resolved" }}
+## <font color="info">✅ Prometheus恢复</font>
+> **告警名称：** <font color="info">{{ with $a.labels.alertname }}{{ . }}{{ else }}未命名告警{{ end }}</font>
+> **告警级别：** {{ with $a.labels.severity }}{{ . }}{{ else }}{{ with $a.labels.level }}{{ . }}{{ else }}未设置{{ end }}{{ end }}
+> **告警状态：** <font color="info">已恢复</font>
+{{ if $a.labels.cluster }}> **集群：** {{ $a.labels.cluster }}
+{{ end }}{{ if $a.labels.namespace }}> **命名空间：** {{ $a.labels.namespace }}
+{{ end }}{{ if $a.labels.pod }}> **Pod：** {{ $a.labels.pod }}
+{{ end }}{{ if $a.labels.container }}> **容器：** {{ $a.labels.container }}
+{{ end }}{{ if $a.labels.node }}> **节点：** {{ $a.labels.node }}
+{{ end }}{{ if $a.labels.instance }}> **实例：** {{ $a.labels.instance }}
+{{ end }}{{ if $a.labels.service }}> **服务：** {{ $a.labels.service }}
+{{ end }}{{ if $a.labels.job }}> **采集任务：** {{ $a.labels.job }}
+{{ end }}{{ if $a.labels.persistentvolumeclaim }}> **PVC：** {{ $a.labels.persistentvolumeclaim }}
+{{ end }}{{ if $a.labels.deployment }}> **Deployment：** {{ $a.labels.deployment }}
+{{ end }}{{ if $a.labels.statefulset }}> **StatefulSet：** {{ $a.labels.statefulset }}
+{{ end }}{{ if $a.labels.daemonset }}> **DaemonSet：** {{ $a.labels.daemonset }}
+{{ end }}{{ if $a.labels.ingress }}> **Ingress：** {{ $a.labels.ingress }}
+{{ end }}{{ if $a.labels.certificate }}> **证书：** {{ $a.labels.certificate }}
+{{ end }}> **开始时间：** {{ $a.startsAt }}
+> **恢复时间：** {{ $a.endsAt }}
+> **描述：** {{ with $a.annotations.description }}{{ . }}{{ else }}{{ with $a.annotations.summary }}{{ . }}{{ else }}{{ with $a.annotations.message }}{{ . }}{{ else }}无详细描述{{ end }}{{ end }}{{ end }}{{ if $a.annotations.suggestion }}
+> ⚠️ **排查建议：** {{ $a.annotations.suggestion }}{{ end }}{{ if $a.annotations.runbook_url }}
+> 📖 **排查文档：** [点击查看]({{ $a.annotations.runbook_url }}){{ end }}{{ if $a.generatorURL }}
+> 🔗 **Prometheus：** [点击查看]({{ $a.generatorURL }}){{ end }}
+{{- else }}
+## <font color="warning">🚨 Prometheus告警</font>
+> **告警名称：** <font color="warning">{{ with $a.labels.alertname }}{{ . }}{{ else }}未命名告警{{ end }}</font>
+> **告警级别：** <font color="{{ if eq $a.labels.severity "critical" }}warning{{ else }}comment{{ end }}">{{ with $a.labels.severity }}{{ . }}{{ else }}{{ with $a.labels.level }}{{ . }}{{ else }}未设置{{ end }}{{ end }}</font>
+> **告警状态：** <font color="warning">触发中</font>
+{{ if $a.labels.cluster }}> **集群：** {{ $a.labels.cluster }}
+{{ end }}{{ if $a.labels.namespace }}> **命名空间：** {{ $a.labels.namespace }}
+{{ end }}{{ if $a.labels.pod }}> **Pod：** {{ $a.labels.pod }}
+{{ end }}{{ if $a.labels.container }}> **容器：** {{ $a.labels.container }}
+{{ end }}{{ if $a.labels.node }}> **节点：** {{ $a.labels.node }}
+{{ end }}{{ if $a.labels.instance }}> **实例：** {{ $a.labels.instance }}
+{{ end }}{{ if $a.labels.service }}> **服务：** {{ $a.labels.service }}
+{{ end }}{{ if $a.labels.job }}> **采集任务：** {{ $a.labels.job }}
+{{ end }}{{ if $a.labels.persistentvolumeclaim }}> **PVC：** {{ $a.labels.persistentvolumeclaim }}
+{{ end }}{{ if $a.labels.deployment }}> **Deployment：** {{ $a.labels.deployment }}
+{{ end }}{{ if $a.labels.statefulset }}> **StatefulSet：** {{ $a.labels.statefulset }}
+{{ end }}{{ if $a.labels.daemonset }}> **DaemonSet：** {{ $a.labels.daemonset }}
+{{ end }}{{ if $a.labels.ingress }}> **Ingress：** {{ $a.labels.ingress }}
+{{ end }}{{ if $a.labels.certificate }}> **证书：** {{ $a.labels.certificate }}
+{{ end }}> **触发时间：** {{ $a.startsAt }}
+> **描述：** {{ with $a.annotations.description }}{{ . }}{{ else }}{{ with $a.annotations.summary }}{{ . }}{{ else }}{{ with $a.annotations.message }}{{ . }}{{ else }}无详细描述{{ end }}{{ end }}{{ end }}{{ if $a.annotations.value }}
+> **当前值：** {{ $a.annotations.value }}{{ end }}{{ if $a.annotations.threshold }}
+> **阈值：** {{ $a.annotations.threshold }}{{ end }}{{ if $a.annotations.suggestion }}
+> ⚠️ **排查建议：** {{ $a.annotations.suggestion }}{{ end }}{{ if $a.annotations.runbook_url }}
+> 📖 **排查文档：** [点击查看]({{ $a.annotations.runbook_url }}){{ end }}{{ if $a.generatorURL }}
+> 🔗 **Prometheus：** [点击查看]({{ $a.generatorURL }}){{ end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,40 @@
+# =============================================================================
+# Alertmanager → PrometheusAlert 告警路由
+# =============================================================================
+# 把 severity 为 warning / critical 的告警，通过 Webhook 转发到 PrometheusAlert，
+# 再由 PrometheusAlert 渲染模板后发送到企业微信群。
+#
+# 路由参数：
+#   groupWait: 30s       → 首次告警到达后等待 30s 再发送（合并同组告警）
+#   groupInterval: 5m    → 同组后续告警每 5 分钟发送一次
+#   repeatInterval: 1h   → 未恢复的告警每 1 小时重复通知一次（避免刷屏）
+#   sendResolved: true   → 告警恢复时也发送通知（绿色恢复消息）
+#
+# ⚠️ 修改企业微信地址请到 secret.yaml，不要直接改这个文件。
+# =============================================================================
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: prometheusalert
+  namespace: monitoring
+  labels:
+    release: kps
+    alert-routing: prometheusalert
+spec:
+  route:
+    receiver: notify-workwechat
+    groupBy: [cluster, namespace, alertname]
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 1h
+    matchers:
+      - name: severity
+        matchType: '=~'
+        value: 'warning|critical'
+  receivers:
+    - name: notify-workwechat
+      webhookConfigs:
+        - urlSecret:
+            name: prometheusalert-webhooks
+            key: workwechat-url
+          sendResolved: true

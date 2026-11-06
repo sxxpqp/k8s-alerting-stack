@@ -1,0 +1,36 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alerts-storage
+  namespace: monitoring
+  labels:
+    release: kps
+    app: kube-prometheus-stack
+    team: platform
+spec:
+  groups:
+  - name: pvc
+    interval: 30s
+    rules:
+    - alert: PVCUsageHigh
+      expr: |-
+        (kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) * 100 > 80
+      for: 15m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} 使用率超过 80%
+        description: 当前使用率={{ $value }}%，阈值 >80%，持续 15 分钟
+        suggestion: 清理无用数据或扩容 PVC
+    - alert: PVCUsageCritical
+      expr: |-
+        (kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) * 100 > 95
+      for: 3m
+      labels:
+        severity: critical
+        team: platform
+      annotations:
+        summary: PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} 使用率超过 95%，即将写满
+        description: 当前使用率={{ $value }}%，阈值 >95%，需紧急处理
+        suggestion: 立即扩容 PVC 或清理数据，避免应用写入失败

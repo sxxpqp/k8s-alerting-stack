@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: example-flink-jobmanager
+  namespace: monitoring
+  labels:
+    release: kps
+spec:
+  namespaceSelector:
+    matchNames: [REPLACE_FLINK_NAMESPACE]
+  selector:
+    matchLabels:
+      app: REPLACE_POD_LABEL
+  podMetricsEndpoints:
+    - port: metrics # Pod容器的命名端口；Flink reporter须已启用。
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      relabelings:
+        - targetLabel: job
+          replacement: flink-jobmanager

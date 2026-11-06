@@ -1,0 +1,51 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alerts-containers
+  namespace: monitoring
+  labels:
+    release: kps
+    app: kube-prometheus-stack
+    team: platform
+spec:
+  groups:
+  - name: containers
+    interval: 30s
+    rules:
+    - alert: ContainerCPUThrottling
+      expr: |-
+        (sum by (namespace, pod, container, cluster) (rate(container_cpu_cfs_throttled_seconds_total{container!=""}[5m]))
+        / sum by (namespace, pod, container, cluster) (rate(container_cpu_usage_seconds_total{container!=""}[5m]))) * 100 > 50
+      for: 15m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: 容器 {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} CPU 被严重限流
+        description: 当前 CPU 限流比例={{ $value }}%，阈值 >50%，持续 15 分钟
+        suggestion: 检查容器 CPU limit 是否设置过低，根据实际用量调整
+    - alert: ContainerMemoryNearLimit
+      expr: |-
+        100 * max by (cluster, namespace, pod, container, instance) (
+          container_memory_working_set_bytes{container!="",container!="POD",image!=""}
+        ) / on (cluster, namespace, pod, container) group_left()
+        (max by (cluster, namespace, pod, container) (kube_pod_container_resource_limits{resource="memory",unit="byte"}) > 0)
+        > 85
+      for: 10m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: 容器 {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} 内存接近 limit
+        description: 当前 working_set/memory_limit={{ $value }}%，阈值 >85%，持续 10 分钟
+        suggestion: 检查容器内存趋势，确认是否泄漏或需调整 limit
+    - alert: ContainerOOMKilled
+      expr: |-
+        kube_pod_container_status_terminated_reason{reason="OOMKilled"} == 1
+      labels:
+        severity: critical
+        team: platform
+      annotations:
+        summary: 容器 {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} 被 OOM 杀死
+        description: 容器因内存不足被终止，需要立即处理
+        suggestion: 检查容器内存使用情况，增大 limit 或排查内存泄漏

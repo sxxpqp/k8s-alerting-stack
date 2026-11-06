@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheusalert
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheusalert
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: prometheusalert
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app: prometheusalert
+      containers:
+        - name: prometheusalert
+          image: feiyu563/prometheus-alert:v4.9.1
+          imagePullPolicy: IfNotPresent
+          command: [/app/PrometheusAlert]
+          workingDir: /app
+          ports:
+            - name: http
+              containerPort: 8080
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: config
+              mountPath: /app/conf/app.conf
+              subPath: app.conf
+              readOnly: true
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: config
+          secret:
+            secretName: prometheusalert-config
+            defaultMode: 0400
+        - name: data
+          persistentVolumeClaim:
+            claimName: prometheusalert-data

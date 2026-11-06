@@ -1,0 +1,47 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alerts-prometheus
+  namespace: monitoring
+  labels:
+    release: kps
+    app: kube-prometheus-stack
+    team: platform
+spec:
+  groups:
+  - name: prometheus
+    interval: 30s
+    rules:
+    - alert: PrometheusNotScraping
+      expr: |-
+        up == 0
+      for: 5m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: 采集目标 {{ $labels.job }}/{{ $labels.instance }} 不可达
+        description: up=0，过去 5 分钟无法采集
+        suggestion: 检查目标服务和网络连通性
+    - alert: PrometheusRuleFailing
+      expr: |-
+        prometheus_rule_evaluation_failures_total > 0
+      for: 5m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: Prometheus 规则评估出现失败
+        description: 失败次数={{ $value }}，可能存在错误的规则配置
+        suggestion: 检查 Prometheus 日志和最近修改的规则文件
+    - alert: PrometheusNotConnectedToAlertmanager
+      expr: |-
+        prometheus_notifications_alertmanagers_discovered < 1
+      for: 5m
+      labels:
+        severity: critical
+        team: platform
+      annotations:
+        summary: Prometheus 未连接到任何 Alertmanager
+        description: 发现的 Alertmanager 数量={{ $value }}，告警无法发送
+        suggestion: 检查 Alertmanager 服务状态和 Prometheus 配置

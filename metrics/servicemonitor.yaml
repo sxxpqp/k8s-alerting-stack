@@ -1,0 +1,23 @@
+# 直接填写实际资源名、selector、namespace和端口。一个文件只管理一个业务采集配置。
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: example-mysqld-exporter
+  namespace: monitoring
+  labels:
+    release: kps
+spec:
+  namespaceSelector:
+    matchNames: [REPLACE_APP_NAMESPACE]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: REPLACE_SERVICE_LABEL
+  endpoints:
+    - port: metrics # Service端口名称，不是容器端口号或NodePort。
+      path: /metrics
+      scheme: http
+      interval: 30s
+      scrapeTimeout: 10s
+      relabelings:
+        - targetLabel: job
+          replacement: mysqld-exporter # 必须与告警规则契约对应。

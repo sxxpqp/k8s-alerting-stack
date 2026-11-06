@@ -1,0 +1,104 @@
+# 自定义节点 Exporter 模板：适用于 node_exporter 之外的附加节点级采集器。
+# 常见场景：GPU 监控、硬件传感器、进程级监控等。
+# 按实际部署的 exporter 取消对应章节注释并填写 Service 信息。
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: node-custom-exporter
+  namespace: monitoring
+  labels:
+    release: kps
+    app: kube-prometheus-stack
+    purpose: node-enhanced
+spec:
+  namespaceSelector:
+    matchNames: [monitoring]
+  selector:
+    matchLabels:
+      # 所有自定义 exporter 共享此标签，方便批量管理
+      app.kubernetes.io/component: node-exporter
+      monitoring: enabled
+  endpoints:
+
+    # -------- NVIDIA GPU 监控 --------
+    # 前提：已部署 nvidia-dcgm-exporter (DaemonSet + Service)
+    # 安装：helm repo add nvidia https://nvidia.github.io/dcgm-exporter/helm-charts
+    #       helm install dcgm-exporter nvidia/dcgm-exporter -n monitoring
+    # - port: gpu-metrics
+    #   scheme: http
+    #   interval: 30s
+    #   scrapeTimeout: 10s
+    #   path: /metrics
+    #   relabelings:
+    #     - targetLabel: job
+    #       replacement: nvidia-dcgm-exporter
+    #     - targetLabel: env
+    #       replacement: production
+
+    # -------- 硬件传感器 (lm-sensors) --------
+    # 前提：node_exporter 启动时添加 --collector.hwmon
+    # - port: http-metrics
+    #   scheme: http
+    #   interval: 120s
+    #   scrapeTimeout: 30s
+    #   path: /metrics
+    #   params:
+    #     collect[]: [hwmon]
+    #   metricRelabelings:
+    #     - sourceLabels: [__name__]
+    #       regex: '^node_hwmon_.*'
+    #       action: keep
+
+    # -------- 中断统计 --------
+    # 前提：node_exporter 启动时添加 --collector.interrupts
+    # - port: http-metrics
+    #   scheme: http
+    #   interval: 300s
+    #   scrapeTimeout: 30s
+    #   path: /metrics
+    #   params:
+    #     collect[]: [interrupts]
+    #   metricRelabelings:
+    #     - sourceLabels: [__name__]
+    #       regex: '^node_interrupts_.*'
+    #       action: keep
+
+    # -------- 温度传感器 --------
+    # 前提：node_exporter 启动时添加 --collector.thermal_zone
+    # - port: http-metrics
+    #   scheme: http
+    #   interval: 60s
+    #   scrapeTimeout: 30s
+    #   path: /metrics
+    #   params:
+    #     collect[]: [thermal_zone]
+    #   metricRelabelings:
+    #     - sourceLabels: [__name__]
+    #       regex: '^node_thermal_zone_.*'
+    #       action: keep
+
+    # -------- 进程级 Exporter（需单独部署）--------
+    # 前提：已部署 process-exporter (DaemonSet + Service)
+    # 用途：监控每个进程的 CPU、内存、IO、fd 等，配置进程组归类
+    # 安装：https://github.com/ncabatoff/process-exporter
+    # - port: metrics
+    #   scheme: http
+    #   interval: 60s
+    #   scrapeTimeout: 30s
+    #   path: /metrics
+    #   relabelings:
+    #     - targetLabel: job
+    #       replacement: process-exporter
+
+    # -------- 节点问题检测器 --------
+    # 前提：已部署 node-problem-detector (DaemonSet + Service)
+    # 用途：内核死锁、OOM、磁盘只读、Docker 异常等节点级问题
+    # 安装：kubectl apply -f https://github.com/kubernetes/node-problem-detector
+    # - port: metrics
+    #   scheme: http
+    #   interval: 60s
+    #   scrapeTimeout: 30s
+    #   path: /metrics
+    #   relabelings:
+    #     - targetLabel: job
+    #       replacement: node-problem-detector

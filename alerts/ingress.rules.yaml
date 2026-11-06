@@ -1,0 +1,37 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alerts-ingress
+  namespace: monitoring
+  labels:
+    release: kps
+    app: kube-prometheus-stack
+    team: platform
+spec:
+  groups:
+  - name: ingress
+    interval: 30s
+    rules:
+    - alert: IngressHigh5xxRate
+      expr: |-
+        sum(rate(nginx_ingress_controller_requests{status=~"5.."}[5m])) by (ingress, namespace, cluster)
+        / sum(rate(nginx_ingress_controller_requests[5m])) by (ingress, namespace, cluster) * 100 > 5
+      for: 5m
+      labels:
+        severity: critical
+        team: platform
+      annotations:
+        summary: Ingress {{ $labels.namespace }}/{{ $labels.ingress }} 5xx 错误率超过 5%
+        description: 当前 5xx 比例={{ $value }}%，阈值 >5%，持续 5 分钟
+        suggestion: 检查后端服务健康状态和 Ingress 配置
+    - alert: IngressHighLatency
+      expr: |-
+        histogram_quantile(0.99, sum(rate(nginx_ingress_controller_request_duration_seconds_bucket[5m])) by (le, ingress, namespace)) > 5
+      for: 10m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: Ingress {{ $labels.namespace }}/{{ $labels.ingress }} P99 延迟超过 5 秒
+        description: 当前 P99 延迟={{ $value }}秒，阈值 >5 秒，持续 10 分钟
+        suggestion: 排查后端服务和网络状况

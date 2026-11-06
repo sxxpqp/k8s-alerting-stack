@@ -1,0 +1,37 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alerts-certmanager
+  namespace: monitoring
+  labels:
+    release: kps
+    app: kube-prometheus-stack
+    team: platform
+spec:
+  groups:
+  - name: certmanager
+    interval: 30s
+    rules:
+    - alert: CertificateExpiringSoon
+      expr: |-
+        certmanager_certificate_expiration_timestamp_seconds - time() < 86400 * 14
+        and certmanager_certificate_expiration_timestamp_seconds - time() > 0
+      for: 5m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: 证书 {{ $labels.namespace }}/{{ $labels.name }} 将在 14 天内过期
+        description: 剩余={{ $value | humanizeDuration }}，请及时更新
+        suggestion: 检查 cert-manager 自动续期配置或手动更新证书
+    - alert: CertificateNotReady
+      expr: |-
+        certmanager_certificate_ready_status{condition="False"} == 1
+      for: 30m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: 证书 {{ $labels.namespace }}/{{ $labels.name }} 未就绪超过 30 分钟
+        description: 证书签发或续期可能失败
+        suggestion: 检查 Certificate 资源状态和 cert-manager 日志

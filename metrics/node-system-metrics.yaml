@@ -1,0 +1,105 @@
+# 系统级指标采集：针对 node_exporter 中默认不启用的高阶指标。
+# 前提：node_exporter 启动参数中已添加对应 --collector.* 标志。
+# 如果使用 kube-prometheus-stack 的 node_exporter，在 prom-values.yaml 中通过
+# prometheus-node-exporter.extraArgs 添加对应参数后，取消本文件对应 endpoint 的注释。
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: node-system-metrics
+  namespace: monitoring
+  labels:
+    release: kps
+    app: kube-prometheus-stack
+    purpose: node-enhanced
+spec:
+  namespaceSelector:
+    matchNames: [monitoring]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus-node-exporter
+  endpoints:
+    # --- systemd 服务状态监控 ---
+    # 前提：node_exporter 启动参数添加 --collector.systemd
+    # 以及 --collector.systemd.unit-include=(docker|kubelet|sshd|chronyd).service
+    # - port: http-metrics
+    #   scheme: http
+    #   interval: 60s
+    #   scrapeTimeout: 30s
+    #   path: /metrics
+    #   params:
+    #     collect[]: [systemd]
+    #   metricRelabelings:
+    #     - sourceLabels: [__name__]
+    #       regex: 'node_systemd_unit_state'
+    #       action: keep
+
+    # --- 进程监控 ---
+    # 前提：node_exporter 启动参数添加 --collector.processes
+    # - port: http-metrics
+    #   scheme: http
+    #   interval: 30s
+    #   scrapeTimeout: 30s
+    #   path: /metrics
+    #   params:
+    #     collect[]: [processes]
+    #   metricRelabelings:
+    #     - sourceLabels: [__name__]
+    #       regex: 'node_processes_.*'
+    #       action: keep
+
+    # --- 文件描述符 ---
+    # 前提：node_exporter 启动参数添加 --collector.filefd
+    # - port: http-metrics
+    #   scheme: http
+    #   interval: 60s
+    #   scrapeTimeout: 30s
+    #   path: /metrics
+    #   params:
+    #     collect[]: [filefd]
+    #   metricRelabelings:
+    #     - sourceLabels: [__name__]
+    #       regex: 'node_filefd_.*'
+    #       action: keep
+
+    # --- 网络设备详细统计 ---
+    # 前提：node_exporter 默认已启用 netdev collector
+    # 独立 endpoint 降低采集频率减少 Prometheus 负载
+    - port: http-metrics
+      scheme: http
+      interval: 120s
+      scrapeTimeout: 30s
+      path: /metrics
+      params:
+        collect[]: [netdev]
+      relabelings:
+        - targetLabel: env
+          replacement: production
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: '^node_network_.*'
+          action: keep
+        # 丢弃虚拟网卡指标
+        - sourceLabels: [device]
+          regex: '^(veth.*|cali.*|tunl.*|flannel.*|cni.*|docker.*|lxc.*|lo)$'
+          action: drop
+
+    # --- 磁盘 IO 详细统计 ---
+    # 前提：node_exporter 默认已启用 diskstats collector
+    - port: http-metrics
+      scheme: http
+      interval: 120s
+      scrapeTimeout: 30s
+      path: /metrics
+      params:
+        collect[]: [diskstats]
+      relabelings:
+        - targetLabel: env
+          replacement: production
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: '^node_disk_.*'
+          action: keep
+        # 只保留物理磁盘，丢弃 dm-/loop/ram 设备
+        - sourceLabels: [device]
+          regex: '^(dm-.*|loop.*|ram.*)'
+          action: drop

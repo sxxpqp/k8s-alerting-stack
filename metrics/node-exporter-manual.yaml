@@ -1,0 +1,53 @@
+# =============================================================================
+# 外部裸金属 Linux 主机 node_exporter 监控配置
+# =============================================================================
+# 场景：node_exporter 部署在 K8s 集群外的 Linux 物理机/虚拟机上
+# 原理：Prometheus 通过 static_configs 直连 IP:PORT，不走 ServiceMonitor
+# 管理：修改 metrics/external-scrape-configs.yaml 后 kubectl apply 秒级生效
+#       无需 helm upgrade，Prometheus Operator 自动热加载
+# =============================================================================
+#
+# 1. 在目标 Linux 主机上安装 node_exporter
+# ---------------------------------------------------------------------------
+# wget https://github.com/prometheus/node_exporter/releases/download/v1.9.0/node_exporter-1.9.0.linux-amd64.tar.gz
+# tar xzf node_exporter-1.9.0.linux-amd64.tar.gz
+# sudo cp node_exporter-1.9.0.linux-amd64/node_exporter /usr/local/bin/
+# sudo useradd -rs /bin/false node_exporter
+#
+# sudo tee /etc/systemd/system/node_exporter.service <<'EOF'
+# [Unit]
+# Description=Prometheus Node Exporter
+# After=network.target
+# [Service]
+# User=node_exporter
+# Group=node_exporter
+# Type=simple
+# ExecStart=/usr/local/bin/node_exporter \
+#   --web.listen-address=:9100 \
+#   --collector.systemd \
+#   --collector.systemd.unit-include=(sshd|chronyd|docker|kubelet)\.service \
+#   --collector.textfile.directory=/var/lib/node_exporter/textfile
+# [Install]
+# WantedBy=multi-user.target
+# EOF
+#
+# sudo systemctl daemon-reload
+# sudo systemctl enable --now node_exporter
+# curl http://localhost:9100/metrics  # 验证
+#
+# 2. 编辑 metrics/external-scrape-configs.yaml，填入主机 IP
+# ---------------------------------------------------------------------------
+# static_configs:
+#   - targets:
+#       - 192.168.1.100:9100    # ← 改为实际 IP
+#       - 192.168.1.101:9100
+#
+# 3. 应用（无需 helm upgrade，秒级生效）
+# ---------------------------------------------------------------------------
+# kubectl apply -f metrics/external-scrape-configs.yaml
+#
+# 4. 验证
+# ---------------------------------------------------------------------------
+# kubectl -n monitoring port-forward svc/kps-kube-prometheus-stack-prometheus 9090:9090
+# 浏览器 → Status → Targets → 搜 "external-node-exporter"
+# =============================================================================

@@ -1,0 +1,33 @@
+{
+  "receiver": "notify-workwechat",
+  "status": "firing",
+  "alerts": [{
+    "status": "firing",
+    "labels": {
+      "alertname": "TestAlert",
+      "severity": "critical",
+      "cluster": "kind-kubesphere-341",
+      "namespace": "monitoring",
+      "pod": "test-pod-abc123",
+      "container": "test-container",
+      "node": "kind-worker",
+      "instance": "192.168.1.100:9100",
+      "service": "kube-prometheus-stack",
+      "job": "external-node-exporter"
+    },
+    "annotations": {
+      "description": "全链路连通性测试：Prometheus → Alertmanager → PrometheusAlert → 企业微信",
+      "summary": "通知链路测试告警",
+      "value": "100%",
+      "threshold": "90%",
+      "suggestion": "此为测试告警，无需处理。若在群内收到此消息则链路正常。",
+      "runbook_url": "https://wiki.example.com/alerting/test"
+    },
+    "startsAt": "2026-11-06T08:50:00Z",
+    "endsAt": "0001-01-01T00:00:00Z",
+    "generatorURL": "http://prometheus:9090/graph?g0.expr=vector%281%29",
+    "fingerprint": "test123"
+  }],
+  "externalURL": "http://alertmanager:9093",
+  "version": "4"
+}

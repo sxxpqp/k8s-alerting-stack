@@ -1,0 +1,59 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alerts-middleware-redis
+  namespace: monitoring
+  labels:
+    release: kps
+    app: kube-prometheus-stack
+    team: database
+spec:
+  groups:
+  - name: redis
+    interval: 30s
+    rules:
+    - alert: RedisDown
+      expr: |-
+        redis_up == 0
+      for: 2m
+      labels:
+        severity: critical
+        team: database
+      annotations:
+        summary: Redis {{ $labels.instance }} 不可达
+        description: redis_up=0，exporter 无法连接，持续 2 分钟
+        suggestion: 确认 Redis 存活，检查 exporter 配置和网络连通性
+    - alert: RedisMemoryHigh
+      expr: |-
+        100 * redis_memory_used_bytes / redis_memory_max_bytes > 85
+        and redis_memory_max_bytes > 0
+      for: 10m
+      labels:
+        severity: warning
+        team: database
+      annotations:
+        summary: Redis {{ $labels.instance }} 内存使用率超过 85%
+        description: 当前使用率={{ $value }}%，阈值 >85%，持续 10 分钟
+        suggestion: 检查大 key、TTL 设置和内存碎片，考虑扩容或淘汰策略调整
+    - alert: RedisRejectedConnections
+      expr: |-
+        rate(redis_rejected_connections_total[5m]) > 0
+      for: 5m
+      labels:
+        severity: warning
+        team: database
+      annotations:
+        summary: Redis {{ $labels.instance }} 有连接被拒绝
+        description: 当前拒绝速率={{ $value }}/秒，可能达到 maxclients 上限
+        suggestion: 检查 maxclients 配置和连接池使用情况
+    - alert: RedisClusterDown
+      expr: |-
+        redis_cluster_state != 1 and redis_cluster_enabled == 1
+      for: 3m
+      labels:
+        severity: critical
+        team: database
+      annotations:
+        summary: Redis Cluster 节点 {{ $labels.instance }} 报告集群异常
+        description: cluster_state={{ $value }}，集群状态异常
+        suggestion: 检查集群节点连通性和主从状态

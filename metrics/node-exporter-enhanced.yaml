@@ -1,0 +1,61 @@
+# 增强版 Node Exporter 采集：手动管理，独立于 Helm 默认配置。
+# 用途：添加自定义标签（环境、机房、集群）、过滤节点、调整采集间隔。
+# 默认 node_exporter 采集仍生效，本配置叠加额外的标签和采集逻辑。
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: node-exporter-enhanced
+  namespace: monitoring
+  labels:
+    release: kps
+    app: kube-prometheus-stack
+    purpose: node-enhanced
+spec:
+  namespaceSelector:
+    matchNames: [monitoring]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus-node-exporter
+  endpoints:
+    - port: http-metrics
+      scheme: http
+      interval: 60s
+      scrapeTimeout: 30s
+      path: /metrics
+      relabelings:
+        # 为所有节点指标添加环境标签
+        - targetLabel: env
+          replacement: production
+        # 从节点名提取机房标签（按实际情况修改正则）
+        - sourceLabels: [node]
+          targetLabel: datacenter
+          replacement: dc1
+        # 从 k8s node 标签同步角色
+        - action: labelmap
+          regex: __meta_kubernetes_node_label_(node-role\.kubernetes\.io/.+)
+      metricRelabelings:
+        # 丢弃不关心的文件系统类型
+        - sourceLabels: [fstype]
+          regex: '^(tmpfs|autofs|binfmt_misc|configfs|cgroup2?|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|mqueue|nsfs|overlay|proc|pstore|rpc_pipefs|securityfs|squashfs|sysfs|tracefs)$'
+          action: drop
+        # 只保留以 / 或者 /var 开头的挂载点
+        - sourceLabels: [mountpoint]
+          regex: '^/(var|$).*'
+          action: keep
+    # 需要采集节点的特殊指标时启用以下 endpoints：
+    # --collector.textfile 目录中的自定义指标
+    # - port: http-metrics
+    #   scheme: http
+    #   interval: 120s
+    #   scrapeTimeout: 30s
+    #   path: /metrics
+    #   params:
+    #     collect[]: [textfile]
+    # --collector.systemd 服务状态（需 node_exporter 启动时开启）
+    # - port: http-metrics
+    #   scheme: http
+    #   interval: 300s
+    #   scrapeTimeout: 30s
+    #   path: /metrics
+    #   params:
+    #     collect[]: [systemd]

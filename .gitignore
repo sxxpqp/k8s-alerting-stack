@@ -1,0 +1,5 @@
+.generated/
+.venv/
+*.key
+.env
+/prom-values.before-upgrade.yaml

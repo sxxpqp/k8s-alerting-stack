@@ -1,0 +1,48 @@
+# 外部采集目标 Secret：Prometheus 通过 static_configs 直连 K8s 集群外的
+# 裸金属/虚拟机上的 exporter（node_exporter、postgres_exporter 等）。
+# 修改后秒级生效：kubectl apply -f metrics/external-scrape-configs.yaml
+# 无需 helm upgrade，Prometheus Operator 会自动热加载。
+apiVersion: v1
+kind: Secret
+metadata:
+  name: external-scrape-configs
+  namespace: monitoring
+  labels:
+    release: kps
+stringData:
+  scrape.yaml: |
+    - job_name: external-node-exporter
+      scrape_interval: 30s
+      scrape_timeout: 10s
+      metrics_path: /metrics
+      scheme: http
+      static_configs:
+        # 每增加一台裸金属 Linux 主机，加一行 IP:PORT
+        - targets:
+            # - 192.168.1.100:9100
+            # - 192.168.1.101:9100
+          labels:
+            env: production
+            exporter_type: baremetal
+            exporter_source: external
+
+    # 外部中间件 exporter（取消注释后填 IP）
+    # - job_name: external-postgres
+    #   scrape_interval: 30s
+    #   scrape_timeout: 10s
+    #   metrics_path: /metrics
+    #   scheme: http
+    #   static_configs:
+    #     - targets: ['192.168.1.200:9187']
+    #       labels:
+    #         env: production
+    #
+    # - job_name: external-redis
+    #   scrape_interval: 30s
+    #   scrape_timeout: 10s
+    #   metrics_path: /metrics
+    #   scheme: http
+    #   static_configs:
+    #     - targets: ['192.168.1.201:9121']
+    #       labels:
+    #         env: production

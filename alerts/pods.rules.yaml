@@ -1,0 +1,51 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alerts-pods
+  namespace: monitoring
+  labels:
+    release: kps
+    app: kube-prometheus-stack
+    team: platform
+spec:
+  groups:
+  - name: pods
+    interval: 30s
+    rules:
+    - alert: PodCrashLoopBackOff
+      expr: |-
+        rate(kube_pod_container_status_restarts_total[15m]) > 0
+        and on (namespace, pod, cluster)
+        kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"} == 1
+      for: 5m
+      labels:
+        severity: critical
+        team: platform
+      annotations:
+        summary: Pod {{ $labels.namespace }}/{{ $labels.pod }} 容器 {{ $labels.container }} 处于 CrashLoopBackOff
+        description: 持续 CrashLoopBackOff，近 15 分钟有重启，需要立即处理
+        suggestion: 查看 Pod 日志和事件排查崩溃原因，可能是 OOM、配置错误或依赖不可达
+    - alert: PodNotReady
+      expr: |-
+        sum by (namespace, pod, cluster) (kube_pod_status_ready{condition="true"}) == 0
+        and on (namespace, pod, cluster)
+        sum by (namespace, pod, cluster) (kube_pod_status_phase{phase!~"Succeeded|Failed"}) > 0
+      for: 10m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: Pod {{ $labels.namespace }}/{{ $labels.pod }} 长时间未就绪
+        description: Pod 未就绪超过 10 分钟，需排查原因
+        suggestion: 检查 Pod 状态、事件和健康检查日志
+    - alert: PodPendingTooLong
+      expr: |-
+        kube_pod_status_phase{phase="Pending"} == 1
+      for: 30m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: Pod {{ $labels.namespace }}/{{ $labels.pod }} 处于 Pending 超过 30 分钟
+        description: Pod 调度或拉取镜像阶段卡住
+        suggestion: 检查节点资源、PVC 绑定、镜像拉取策略和节点亲和性

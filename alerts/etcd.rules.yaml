@@ -1,0 +1,47 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alerts-etcd
+  namespace: monitoring
+  labels:
+    release: kps
+    app: kube-prometheus-stack
+    team: platform
+spec:
+  groups:
+  - name: etcd
+    interval: 30s
+    rules:
+    - alert: EtcdLeaderChanges
+      expr: |-
+        rate(etcd_server_leader_changes_seen_total[15m]) > 0
+      for: 1m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: Etcd 集群最近 15 分钟发生了 leader 切换
+        description: leader 变更速率={{ $value }}，可能影响集群稳定性
+        suggestion: 检查 etcd 节点网络、磁盘 IO 和资源使用情况
+    - alert: EtcdHighFsyncLatency
+      expr: |-
+        histogram_quantile(0.99, sum(rate(etcd_disk_wal_fsync_duration_seconds_bucket[5m])) by (le, instance, cluster)) > 0.5
+      for: 10m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: Etcd {{ $labels.instance }} WAL fsync P99 延迟超过 500ms
+        description: 当前 P99 延迟={{ $value }}秒，阈值 >0.5 秒，磁盘可能存在性能问题
+        suggestion: 检查 etcd 节点磁盘 IO 性能，确保使用 SSD
+    - alert: EtcdDatabaseSizeNearLimit
+      expr: |-
+        (etcd_mvcc_db_total_size_in_bytes / etcd_server_quota_backend_bytes) * 100 > 80
+      for: 5m
+      labels:
+        severity: warning
+        team: platform
+      annotations:
+        summary: Etcd 数据库大小接近配额限制
+        description: 当前使用={{ $value }}%，阈值 >80%
+        suggestion: 考虑压缩历史数据或增大 etcd 配额
