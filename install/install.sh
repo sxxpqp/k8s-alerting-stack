@@ -11,7 +11,7 @@ context
 if ! helm repo list 2>/dev/null | grep -q '^prometheus-community'; then
   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 fi
-fi repo update prometheus-community
+helm repo update prometheus-community
 if [[ "$action" == upgrade ]]; then
   helm get values kps -n monitoring > prom-values.before-upgrade.yaml
 fi

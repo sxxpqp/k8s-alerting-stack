@@ -1,6 +1,6 @@
 # 接入指标采集
 
-先安装基础栈和业务 exporter（如 mysqld_exporter、redis_exporter、kafka_exporter 等），再创建对应的采集 CRD。
+先安装基础监控栈和业务 exporter（如 mysqld_exporter、redis_exporter、kafka_exporter），再创建对应的采集 CRD。
 
 ## 采集方式
 
@@ -14,15 +14,17 @@
 
 ## 部署
 
-一次部署一个文件：
-
 ```bash
+# 部署节点增强采集（node_exporter / system / kubelet）
+bash metrics/apply.sh node
+
+# 部署单个采集资源
 bash metrics/apply.sh metrics/servicemonitor.yaml
 bash metrics/apply.sh metrics/podmonitor.yaml
 bash metrics/apply.sh metrics/probe-http.yaml
 ```
 
-脚本检查占位符 → 服务端预检 → apply。更新时修改文件后重新执行即可，无需重启 Prometheus。
+脚本流程：检查占位符 → 服务端预检 → apply。更新时修改文件后重新执行即可，无需重启 Prometheus。
 
 ## 验证
 
@@ -39,7 +41,9 @@ up{job="mysqld-exporter"}
 mysql_up{job="mysqld-exporter"}
 ```
 
-两者都应为 1，分别表示采集成功和数据库连通。其他组件同理。**`up=1` 不代表业务指标完整**，需进一步核对具体业务指标。
+两者都应为 1，分别表示采集成功和数据库连通。
+
+> `up=1` 不代表业务指标完整，需进一步核对具体业务指标。
 
 ## 示例：添加 MySQL Exporter 采集
 
