@@ -38,6 +38,11 @@ prometheus:
     retentionSize: 18GB
     replicaExternalLabelName: __replica__
     prometheusExternalLabelName: prometheus
+    enableRemoteWriteReceiver: true
+    enableFeatures:
+      - exemplar-storage
+    exemplars:
+      maxSize: 100000
     externalLabels:
       cluster: kind-kubesphere-341
     resources:
