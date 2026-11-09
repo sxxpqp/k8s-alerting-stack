@@ -2,6 +2,7 @@
 # 基础安装需替换cluster、StorageClass、Prometheus PVC和retentionSize；容量按实际采样量验收。
 grafana:
   enabled: true
+  adminPassword: admin123
   replicas: 1
   persistence:
     enabled: true
